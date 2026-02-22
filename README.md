@@ -1,6 +1,6 @@
 # Risk of Rain 2 Item Tools
 
-This repository contains utilities for exporting item data from the Risk of Rain 2 wiki and generating random item pools.
+This repository contains utilities for exporting item data from the Risk of Rain 2 wiki, generating random item pools, and **optimizing builds** using iterative local search algorithms.
 
 ## Structure
 
@@ -8,17 +8,21 @@ This repository contains utilities for exporting item data from the Risk of Rain
   - `utils.py` – MediaWiki API helpers, thumbnail handling, and path constants
   - `exporter.py` – item export functionality
   - `generator.py` – random pool generation
+  - **`optimizer.py`** – local search optimization engine
+  - **`scoring.py`** – pool scoring functions
+  - **`interactive.py`** – interactive CLI for optimization
+  - **`history.py`** – optimization history tracking and visualization
 - `export_items.py` – simple CLI wrapper that calls `ror2tools.export_items`
 - `random_items.py` – simple CLI wrapper that calls `ror2tools.generate_pool`
 - `data/` – persistent data store
-  - `config.json` – configuration for pool generation
+  - `config.json` – configuration for pool generation and optimization
   - `items.csv` – exported item dataset
 - `cache/` – thumbnail cache (`thumbnail_cache.json`)
-- `output/` – generated outputs (`generated_pool.csv`, `generated_pool.md`)
+- `output/` – generated outputs (`generated_pool.csv`, `generated_pool.md`, `optimization_history.json`, `optimization_history.png`)
 
 ## Available Commands
 
-Run within the project root (ensure the virtual environment is activated). There are two options:
+Run within the project root (ensure the virtual environment is activated).
 
 **Unified CLI (preferred)**
 ```powershell
@@ -31,9 +35,49 @@ python main.py generate
 # build a pool with advanced scoring options (prints a pool score)
 python main.py build --size 5 --style frenzy --synergy-weight 2.0
 
+# ✨ NEW: optimize a pool using local search (batch mode)
+python main.py optimize --max-iterations 100 --k-opt 1
+
+# ✨ NEW: optimize with interactive mode (pause after each iteration)
+python main.py optimize --interactive --max-iterations 100
+
+# ✨ NEW: optimize and generate visualization
+python main.py optimize --visualize --max-iterations 50 --synergy-weight 2.0
+
 # show description and wiki tips for a given item
 python main.py describe "Crowbar"
 ```
+
+### Optimization Features
+
+The `optimize` command implements **iterative local search** to find better item combinations:
+
+- **K-opt swaps**: Systematically explores item swaps while preserving rarity constraints
+- **Greedy best-first**: Selects the best improvement at each iteration
+- **Convergence detection**: Stops when no improvements found for N iterations
+- **Simulated annealing**: Optional probabilistic acceptance of worse solutions to escape local optima
+- **Interactive mode**: Pause after each iteration to observe progress and manually intervene
+- **Manual editing**: In interactive mode, manually swap items between iterations
+- **History tracking**: Records all changes and exports detailed JSON logs
+- **Visualization**: Generates plots showing score progression over time
+
+**Optimization flags:**
+- `--max-iterations N`: Maximum optimization iterations (default: 100)
+- `--k-opt K`: Number of items to swap simultaneously (1 or 2, default: 1)
+- `--convergence N`: Stop after N iterations without improvement (default: 10)
+- `--interactive`: Enable interactive mode with manual control
+- `--visualize`: Generate optimization progress plot
+- `--seed N`: Random seed for reproducibility
+
+**Interactive mode commands:**
+- `c` / `continue`: Run next iteration
+- `r N` / `run N`: Run N iterations without pausing
+- `s X → Y` / `swap X → Y`: Manually swap item X with item Y
+- `v` / `view`: Show detailed scoring breakdown
+- `p` / `pool`: Show current pool again
+- `b` / `best`: Show best pool found so far
+- `e` / `export`: Save current pool
+- `q` / `quit`: Stop optimization
 
 ### Python API
 
@@ -41,15 +85,24 @@ You may also import the package directly in your own scripts:
 
 ```python
 from ror2tools import export_items, generate_pool
+from ror2tools.optimizer import LocalSearchOptimizer
+from ror2tools.generator import load_items, load_config
 
-# programmatically export or generate
+# Export or generate
 export_items()
 generate_pool()
+
+# Optimize programmatically
+items = load_items()
+config = load_config()
+optimizer = LocalSearchOptimizer(items, config, k_opt=1, max_iterations=50)
+best_pool, state = optimizer.optimize()
+print(f"Optimized score: {state.best_score}")
 ```
 
 ## Configuration Keys
 
-The pool generator reads `data/config.json` and supports the following keys:
+The pool generator and optimizer read `data/config.json` and support the following keys:
 
 - **rarity counts** (`Common`, `Uncommon`, `Legendary`, `Boss`, `Lunar`,
   `Void`, `Equipment`).  Numeric values indicate how many items of each
@@ -75,10 +128,54 @@ The pool generator reads `data/config.json` and supports the following keys:
 - **graph_ignore_tags** – (optional) list of specific tag strings to omit
   from the graph regardless of frequency.  Defaults to
   `["utility","damage","healing"]`.
+- **optimization** – (optional) nested object with optimization parameters:
+  - `max_iterations` – maximum optimization iterations (default: 100)
+  - `k_opt` – number of items to swap simultaneously, 1 or 2 (default: 1)
+  - `convergence_threshold` – stop after N stale iterations (default: 10)
+  - `use_simulated_annealing` – accept worse solutions probabilistically (default: false)
+  - `temperature_initial` – starting temperature for annealing (default: 1.0)
+  - `temperature_decay` – temperature multiplier per iteration (default: 0.95)
 
 The generator automatically falls back to a **simple rarity-based pool** if
 only the rarity counts are provided (or when using `main.py generate`). No
 special flag is required; the legacy logic (`select_pool`) handles this.
+
+### Example Configuration
+
+**Basic optimization:**
+```json
+{
+  "Common": 3,
+  "Uncommon": 2,
+  "Legendary": 1,
+  "style": "frenzy",
+  "synergy_weight": 2.0,
+  "optimization": {
+    "max_iterations": 50,
+    "k_opt": 1,
+    "convergence_threshold": 5
+  }
+}
+```
+
+**Advanced optimization with annealing:**
+```json
+{
+  "Common": 5,
+  "Uncommon": 3,
+  "Legendary": 2,
+  "style": "cc",
+  "synergy_weight": 3.0,
+  "optimization": {
+    "max_iterations": 200,
+    "k_opt": 2,
+    "convergence_threshold": 20,
+    "use_simulated_annealing": true,
+    "temperature_initial": 2.0,
+    "temperature_decay": 0.98
+  }
+}
+```
 
 ## Output Columns
 

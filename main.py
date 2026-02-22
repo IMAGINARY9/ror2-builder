@@ -110,7 +110,7 @@ def main():
             print("Saved optimization plot to output/optimization_history.png")
         
         # Export pool using existing generator function
-        from ror2tools.exporter import export_pool_files
+        from ror2tools.generator import export_pool_files
         export_pool_files(best_pool, final_state.best_score)
         print("Saved optimized pool to output/generated_pool.csv and .md")
         
