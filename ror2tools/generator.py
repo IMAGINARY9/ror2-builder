@@ -6,6 +6,7 @@ import time
 from html import escape
 
 from .utils import DATA_DIR, OUTPUT_DIR, load_synergy_graph
+from .scoring import score_pool, score_breakdown
 
 CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
 ITEMS_CSV = os.path.join(DATA_DIR, 'items.csv')
@@ -35,23 +36,6 @@ def load_items(path=ITEMS_CSV):
             r['Playstyles'] = [p for p in r.get('Playstyles', '').split(',') if p]
             items.append(r)
     return items
-
-
-def score_pool(pool, graph, style=None, synergy_weight=0):
-    # base score: count items matching style
-    score = 0
-    if style:
-        for it in pool:
-            if style in it.get('Playstyles', []):
-                score += 1
-    # add pairwise synergy
-    if graph and synergy_weight:
-        for i in range(len(pool)):
-            for j in range(i+1, len(pool)):
-                a = pool[i]['Name']; b = pool[j]['Name']
-                score += graph.get(a, {}).get(b, 0) + graph.get(b, {}).get(a, 0)
-        score *= synergy_weight
-    return score
 
 
 def build_pool(items, config, max_attempts=5000):
@@ -253,3 +237,68 @@ def generate_pool(config=None):
             f.write(f'| {name_colored} | {rarity_colored} | {tags} | {img_md} |\n')
     print('Saved generated_pool.md (open in editor for visual preview)')
     return pool
+
+
+def export_pool_files(pool, score=0):
+    """
+    Export a pool to CSV and Markdown files.
+    
+    Args:
+        pool: List of item dictionaries
+        score: Optional pool score to include in output
+    """
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    # Export CSV
+    csv_path = os.path.join(OUTPUT_DIR, 'generated_pool.csv')
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        header = ['Name', 'Rarity', 'Category', 'Stats', 'Desc', 'Image']
+        writer.writerow(header)
+        for it in pool:
+            writer.writerow([
+                it.get('Name', ''),
+                it.get('Rarity', ''),
+                it.get('Category', ''),
+                it.get('Stats', ''),
+                it.get('Desc', ''),
+                it.get('Image', '')
+            ])
+    
+    # Export Markdown
+    def color_text(text, rarity):
+        colors = {
+            'Common': '#FFFFFF',
+            'Uncommon': '#50C878',
+            'Legendary': '#FF4500',
+            'Boss': '#FFD700',
+            'Lunar': '#6699FF',
+            'Void': '#800080',
+            'Equipment': '#FFA500',
+            'Elite Equipment': '#FF8C00',
+            'Lunar Equipment': '#00CED1'
+        }
+        col = colors.get(rarity, '')
+        return f'<span style="color:{col}">{text}</span>' if col else text
+    
+    md_path = os.path.join(OUTPUT_DIR, 'generated_pool.md')
+    with open(md_path, 'w', encoding='utf-8') as f:
+        f.write('# Generated Item Pool\n\n')
+        if score:
+            f.write(f'Pool score: {score:.2f}\n\n')
+        f.write('| Name | Rarity | Tags | Image |\n')
+        f.write('|------|--------|------|-------|\n')
+        for it in pool:
+            tag_list = it.get('SynergyTags', [])[:]
+            plays_list = it.get('Playstyles', [])
+            if plays_list:
+                tag_list.append('(' + ','.join(plays_list) + ')')
+            # omit overly generic tags from display
+            display_blacklist = {'damage', 'utility', 'healing'}
+            tag_list = [t for t in tag_list if t not in display_blacklist]
+            tags = ', '.join(f'`{t}`' for t in tag_list if t)
+            img = it.get('Image', '')
+            img_md = f'<img src="{img}" alt="{it["Name"]}" width="50"/>' if img else ''
+            name_colored = color_text(it['Name'], it['Rarity'])
+            rarity_colored = color_text(it['Rarity'], it['Rarity'])
+            f.write(f'| {name_colored} | {rarity_colored} | {tags} | {img_md} |\n')
