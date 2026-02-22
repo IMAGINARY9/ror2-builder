@@ -39,3 +39,19 @@ def test_compute_synergy_graph_empty():
     g = compute_synergy_graph(items)
     assert g == {'A': {}, 'B': {}}
 
+
+def test_tag_frequencies_and_filter():
+    from ror2tools.utils import compute_tag_frequencies, compute_synergy_graph
+    items = [
+        {'Name':'X','SynergyTags':['foo','common']},
+        {'Name':'Y','SynergyTags':['foo','common']},
+        {'Name':'Z','SynergyTags':['bar','common']},
+    ]
+    freq = compute_tag_frequencies(items)
+    assert freq['common'] == 3
+    # graph with default max_ratio=0.3 should drop 'common' (3/3>0.3)
+    g = compute_synergy_graph(items)
+    # only foo and bar remain; edges weight accordingly
+    assert g['X'] == {'Y':1}
+    assert g['Z'] == {}
+

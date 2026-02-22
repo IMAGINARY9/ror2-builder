@@ -1,5 +1,6 @@
 import csv
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .utils import (
     fetch_item_list,
@@ -46,45 +47,60 @@ def export_items(output_csv=None):
             fetch_thumbnail_parallel(remaining)
         save_cache()
 
-    # write into specified output location
+    # write into specified output location (parallelize heavy work)
     os.makedirs(os.path.dirname(output_csv), exist_ok=True)
-    # gather exported rows so we can build the synergy graph afterward
     exported_rows = []
     with open(output_csv, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
-        # add new metadata columns
         writer.writerow(['Name','Rarity','Category','Stats','Desc','Image','Available',
                          'SynergyTags','Playstyles','WikiTips','StatsJson'])
         total = len(all_titles)
-        for idx, name in enumerate(all_titles, 1):
-            print(f'Processing {idx}/{total} {name}')
+
+        def process(name):
             data = module_items.get(name, {})
             rarity = data.get('Rarity', '')
             category_list = data.get('Category', [])
             category = ','.join(category_list)
             desc = data.get('Desc', '')
+            stats_list = data.get('Stats', [])
             stats = ''
-            if 'Stats' in data:
-                stats_list = []
-                for st in data['Stats']:
-                    stats_list.append(f"{st.get('Stat')}={st.get('Value')}")
-                stats = ';'.join(stats_list)
+            if stats_list:
+                stats = ';'.join(f"{st.get('Stat')}={st.get('Value')}" for st in stats_list)
             img = thumbnail_cache.get(name, '')
             available = is_available_item(name, category_list)
-            # additional metadata
-            synergy = compute_synergy_tags(category_list, desc)
+            synergy = compute_synergy_tags(category_list, desc, stats_list)
             playstyles = compute_playstyles(category_list, synergy)
-            tips = fetch_wiki_tips(name)
-            stats_json = json.dumps(data.get('Stats', []))
-            writer.writerow([name, rarity, category, stats, desc, img,
-                             'true' if available else 'false',
-                             ','.join(synergy), ','.join(playstyles), tips, stats_json])
-            exported_rows.append({'Name': name, 'SynergyTags': list(synergy)})
+            try:
+                tips = fetch_wiki_tips(name)
+            except Exception:
+                tips = ''
+            row = [name, rarity, category, stats, desc, img,
+                   'true' if available else 'false',
+                   ','.join(synergy), ','.join(playstyles), tips,
+                   json.dumps(stats_list)]
+            return name, row, {'Name': name, 'SynergyTags': list(synergy)}
+
+        with ThreadPoolExecutor(max_workers=8) as exe:
+            futures = {exe.submit(process, n): n for n in all_titles}
+            for idx, fut in enumerate(as_completed(futures), 1):
+                name = futures[fut]
+                try:
+                    name, row, meta = fut.result()
+                except Exception as e:
+                    print(f'Error processing {name}: {e}')
+                    row = [name] + [''] * 10
+                    meta = {'Name': name, 'SynergyTags': []}
+                print(f'Processed {idx}/{total} {name}')
+                writer.writerow(row)
+                exported_rows.append(meta)
 
     # after exporting CSV, compute synergy graph and save to file
     try:
         from .utils import compute_synergy_graph
-        graph = compute_synergy_graph(exported_rows)
+        # exclude very generic tags that appear too often to be informative
+        graph = compute_synergy_graph(exported_rows,
+                                      max_freq_ratio=0.3,
+                                      ignore_tags=['utility','damage','healing'])
         graph_path = os.path.join(DATA_DIR, 'synergy.json')
         with open(graph_path, 'w', encoding='utf-8') as gf:
             json.dump(graph, gf, ensure_ascii=False, indent=2)

@@ -19,6 +19,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 API_URL = 'https://riskofrain2.fandom.com/api.php'
 CACHE_FILE = os.path.join(CACHE_DIR, 'thumbnail_cache.json')
+TIP_CACHE_FILE = os.path.join(CACHE_DIR, 'tips_cache.json')
 
 # thumbnail cache shared by modules
 try:
@@ -27,14 +28,26 @@ try:
 except FileNotFoundError:
     thumbnail_cache = {}
 
+try:
+    with open(TIP_CACHE_FILE, 'r', encoding='utf-8') as f:
+        tips_cache = json.load(f)
+except FileNotFoundError:
+    tips_cache = {}
+
 
 def save_cache():
     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
         json.dump(thumbnail_cache, f, ensure_ascii=False, indent=2)
 
+def save_tips_cache():
+    with open(TIP_CACHE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(tips_cache, f, ensure_ascii=False, indent=2)
+
 
 def fetch_wiki_tips(title):
     """Return the text of the first "Tips" or "Usage" subsection on the item page."""
+    if title in tips_cache:
+        return tips_cache[title]
     params = {'action': 'parse', 'page': title, 'format': 'json', 'prop': 'sections'}
     resp = requests.get(API_URL, params=params)
     resp.raise_for_status()
@@ -53,21 +66,52 @@ def fetch_wiki_tips(title):
     resp2.raise_for_status()
     html = resp2.json()['parse']['text']['*']
     soup = BeautifulSoup(html, 'html.parser')
-    return soup.get_text(separator=' ', strip=True)
+    text = soup.get_text(separator=' ', strip=True)
+    tips_cache[title] = text
+    save_tips_cache()
+    return text
 
 
-def compute_synergy_tags(category_list, desc):
+def compute_synergy_tags(category_list, desc, stats_list=None):
+    """Return a set of low‑level keywords for the item.
+
+    We derive tags from multiple sources:
+    * category entries (lowercased)
+    * keywords found in the description text
+    * stat names from the Lua module (if provided)
+
+    Tags should be fairly specific so that the synergy graph doesn't
+    collapse into a giant clique.
+    """
     tags = set()
-    # simple heuristics
-    if any('OnKill' in c for c in category_list) or 'kill' in desc.lower():
+    # include categories themselves as tags (normalize lower)
+    for c in category_list:
+        tags.add(c.lower())
+
+    # description-based heuristics
+    d = desc.lower()
+    if any('onkill' in c.lower() for c in category_list) or 'kill' in d:
         tags.add('on-kill')
-    if 'crit' in desc.lower() or 'critical' in desc.lower():
+    if 'crit' in d or 'critical' in d:
         tags.add('crit')
-    if 'slow' in desc.lower() or 'stun' in desc.lower():
+    if 'slow' in d or 'stun' in d or 'freeze' in d:
         tags.add('crowd-control')
-    if 'speed' in desc.lower() or 'movement' in category_list:
+    if 'speed' in d or 'movement' in category_list:
         tags.add('movement')
-    # more rules can be added later
+    if 'heal' in d or 'health' in d or 'barrier' in d:
+        tags.add('healing')
+    if 'armor' in d or 'protection' in d:
+        tags.add('armor')
+    if 'cooldown' in d or 'delay' in d:
+        tags.add('cooldown')
+    if 'area' in d or 'aoe' in d or 'radius' in d:
+        tags.add('area')
+    # stats-based tags
+    if stats_list:
+        for st in stats_list:
+            statname = st.get('Stat','').lower()
+            if statname:
+                tags.add(statname.replace(' ','-'))
     return tags
 
 
@@ -82,24 +126,40 @@ def compute_playstyles(category_list, synergy_tags):
     return styles
 
 
-def compute_synergy_graph(items):
-    """Build a simple adjacency map based on shared synergy tags.
+def compute_tag_frequencies(items):
+    """Return Counter of how often each synergy tag appears in the item list."""
+    from collections import Counter
+    freq = Counter()
+    for a in items:
+        for t in a.get('SynergyTags', []):
+            freq[t] += 1
+    return freq
 
-    `items` should be an iterable of dictionaries each containing at least
-    'Name' and 'SynergyTags' (a list).
-    The returned graph is a dict mapping item name to another dict of
-    neighboring item names with a weight (number of shared tags).
+
+def compute_synergy_graph(items, min_freq=1, max_freq_ratio=0.3, ignore_tags=None):
+    """Build an adjacency map but ignore tags that are too rare/common.
+
+    *Tags* with frequency < *min_freq* or > *max_freq_ratio* × len(items) are
+    dropped before computing shared-tag weights.  A list of additional
+    `ignore_tags` may also be provided (these are removed regardless of
+    frequency).  This reduces noise from extremely common tags like
+    ``utility`` or ``damage``.
     """
+    freq = compute_tag_frequencies(items)
+    n = len(items)
+    allowed = {t for t,c in freq.items() if c >= min_freq and c <= max_freq_ratio * n}
+    if ignore_tags:
+        allowed -= set(ignore_tags)
     graph = {}
     for a in items:
         name_a = a.get('Name')
-        tags_a = set(a.get('SynergyTags', []))
+        tags_a = set(a.get('SynergyTags', [])) & allowed
         graph[name_a] = {}
         for b in items:
             name_b = b.get('Name')
             if name_a == name_b:
                 continue
-            shared = tags_a.intersection(b.get('SynergyTags', []))
+            shared = tags_a & (set(b.get('SynergyTags', [])) & allowed)
             if shared:
                 graph[name_a][name_b] = len(shared)
     return graph

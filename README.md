@@ -81,4 +81,6 @@ When these keys are absent, the generator defaults back to the simple rarity-bas
 
 > **Tip:** you may wish to add `data/`, `cache/`, and `output/` to `.gitignore` if you don't want generated data tracked.
 - Thumbnail fetching is cached and performed in bulk/parallel for speed.
+- The exporter now processes items in a thread pool (8 workers) and caches
+  wiki tips in `cache/tips_cache.json` to avoid repeated network requests.
 - Feel free to extend the package with new modules in `ror2tools/`.
