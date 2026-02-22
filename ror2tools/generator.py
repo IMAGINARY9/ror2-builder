@@ -183,11 +183,13 @@ def generate_pool(config=None):
         print(f'Pool score: {total_score}')
     print('\nGenerated pool:')
     for it in pool:
-        aspects = categorize_item(it)
-        tags = ','.join(it.get('SynergyTags', []))
-        plays = ','.join(it.get('Playstyles', []))
+        tag_list = it.get('SynergyTags', [])[:]
+        plays_list = it.get('Playstyles', [])
+        if plays_list:
+            tag_list.append('(' + ','.join(plays_list) + ')')
+        tags = ','.join(tag_list)
         img = it.get('Image', '')
-        print(f"- {it['Name']} ({it['Rarity']}) aspects={','.join(aspects)} tags={tags} plays={plays} image={img}")
+        print(f"- {it['Name']} ({it['Rarity']}) tags={tags} image={img}")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     csv_path = os.path.join(OUTPUT_DIR, 'generated_pool.csv')
@@ -230,16 +232,21 @@ def generate_pool(config=None):
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write('# Generated Item Pool\n\n')
         f.write(f'Pool score: {score}\n\n' if score else '')
-        f.write('| Name | Rarity | Aspects | Tags | Plays | Image |\n')
-        f.write('|------|--------|---------|------|-------|-------|\n')
+        f.write('| Name | Rarity | Tags | Image |\n')
+        f.write('|------|--------|------|-------|\n')
         for it in pool:
             aspects = ','.join(categorize_item(it))
-            tags = ','.join(it.get('SynergyTags', []))
-            plays = ','.join(it.get('Playstyles', []))
+            tag_list = it.get('SynergyTags', [])[:]
+            plays_list = it.get('Playstyles', [])
+            if plays_list:
+                # include playstyles in tags parenthetically
+                tag_list.append('(' + ','.join(plays_list) + ')')
+            # wrap each tag/entry in backticks to highlight
+            tags = ', '.join(f'`{t}`' for t in tag_list if t)
             img = it.get('Image','')
             img_md = f'<img src="{img}" alt="{it["Name"]}" width="50"/>' if img else ''
             name_colored = color_text(it['Name'], it['Rarity'])
             rarity_colored = color_text(it['Rarity'], it['Rarity'])
-            f.write(f'| {name_colored} | {rarity_colored} | {aspects} | {tags} | {plays} | {img_md} |\n')
+            f.write(f'| {name_colored} | {rarity_colored} | {tags} | {img_md} |\n')
     print('Saved generated_pool.md (open in editor for visual preview)')
     return pool

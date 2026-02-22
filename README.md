@@ -77,14 +77,15 @@ special flag is required; the legacy logic (`select_pool`) handles this.
 Generated CSV/Markdown pools include the following columns:
 
 - **Name, Rarity** – item name and rarity.
-- **Aspects** – a set of broad categories (damage, utility, defense, etc.)
-  inferred from stats.
-- **Tags** – raw synergy tags assigned to each item.
-- **Plays** – playstyle keywords derived from tags; e.g. an item with the
-  `on-kill` tag becomes `frenzy` in this column.  These are used by the
-  generator when you specify a `style` or `require_playstyles`.
+- **Tags** – raw synergy tags assigned to each item.  Playstyles (such as
+  `frenzy`, `cc` or `mobile`) are appended inside parentheses; e.g.
+  ``crowd-control,damage (`cc`)``.  Each tag is wrapped in backticks in the
+  Markdown output for readability.
 - **Image** – thumbnail URL pulled from the wiki.
 
+> **Note:** the previous "Aspects" column overlapped heavily with Tags and
+> has been removed – everything useful that used to appear there is still
+> encoded in the tags themselves.
 (See the notes section below for more on thumbnail caching and performance.)
 
 ## Notes
