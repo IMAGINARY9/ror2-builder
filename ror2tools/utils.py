@@ -33,6 +33,55 @@ def save_cache():
         json.dump(thumbnail_cache, f, ensure_ascii=False, indent=2)
 
 
+def fetch_wiki_tips(title):
+    """Return the text of the first "Tips" or "Usage" subsection on the item page."""
+    params = {'action': 'parse', 'page': title, 'format': 'json', 'prop': 'sections'}
+    resp = requests.get(API_URL, params=params)
+    resp.raise_for_status()
+    sections = resp.json().get('parse', {}).get('sections', [])
+    idx = None
+    for sec in sections:
+        if sec.get('line', '').lower() in ('tips', 'usage'):
+            idx = sec.get('index')
+            break
+    if not idx:
+        return ''
+    # now request that specific section HTML
+    params2 = {'action': 'parse', 'page': title, 'format': 'json',
+               'prop': 'text', 'section': idx}
+    resp2 = requests.get(API_URL, params=params2)
+    resp2.raise_for_status()
+    html = resp2.json()['parse']['text']['*']
+    soup = BeautifulSoup(html, 'html.parser')
+    return soup.get_text(separator=' ', strip=True)
+
+
+def compute_synergy_tags(category_list, desc):
+    tags = set()
+    # simple heuristics
+    if any('OnKill' in c for c in category_list) or 'kill' in desc.lower():
+        tags.add('on-kill')
+    if 'crit' in desc.lower() or 'critical' in desc.lower():
+        tags.add('crit')
+    if 'slow' in desc.lower() or 'stun' in desc.lower():
+        tags.add('crowd-control')
+    if 'speed' in desc.lower() or 'movement' in category_list:
+        tags.add('movement')
+    # more rules can be added later
+    return tags
+
+
+def compute_playstyles(category_list, synergy_tags):
+    styles = set()
+    if 'on-kill' in synergy_tags:
+        styles.add('frenzy')
+    if 'crowd-control' in synergy_tags:
+        styles.add('cc')
+    if 'movement' in synergy_tags:
+        styles.add('mobile')
+    return styles
+
+
 def is_generic_thumb(url):
     # these patterns indicate non-item icons or placeholders
     return ('AC_Icon' in url

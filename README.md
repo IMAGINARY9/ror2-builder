@@ -44,6 +44,22 @@ generate_pool()
 ## Notes
 
 - `data/items.csv` now includes an `Available` column; the pool generator ignores rows marked `false`.
+- In addition to the original fields the exporter writes `SynergyTags`, `Playstyles`, and `WikiTips` columns for each item.  These are used by the generator to classify builds and allow tag-based filtering.
+- The pool generator now understands two optional configuration keys in `data/config.json`:
+  - `require_tags`: a list of synergy tags to include (at least one must appear in the pool)
+  - `require_playstyles`: a list of playstyles to include
+  You can mix these with the existing rarity counts.  For example:
+
+```json
+{
+    "Common": 3,
+    "Uncommon": 2,
+    "Legendary": 1,
+    "require_tags": ["on-kill","crit"]
+}
+```
+
+- A basic test suite using `pytest` is available under `tests/`.  To run the tests, install pytest in your environment (`pip install pytest`) and execute `pytest` from the project root.
 
 > **Tip:** you may wish to add `data/`, `cache/`, and `output/` to `.gitignore` if you don't want generated data tracked.
 - Thumbnail fetching is cached and performed in bulk/parallel for speed.

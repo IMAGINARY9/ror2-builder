@@ -14,7 +14,8 @@ from .utils import (
 
 
 import os
-from .utils import DATA_DIR, OUTPUT_DIR
+import json
+from .utils import DATA_DIR, OUTPUT_DIR, fetch_wiki_tips, compute_synergy_tags, compute_playstyles
 
 def export_items(output_csv=None):
     if output_csv is None:
@@ -49,7 +50,9 @@ def export_items(output_csv=None):
     os.makedirs(os.path.dirname(output_csv), exist_ok=True)
     with open(output_csv, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['Name', 'Rarity', 'Category', 'Stats', 'Desc', 'Image', 'Available'])
+        # add new metadata columns
+        writer.writerow(['Name','Rarity','Category','Stats','Desc','Image','Available',
+                         'SynergyTags','Playstyles','WikiTips','StatsJson'])
         total = len(all_titles)
         for idx, name in enumerate(all_titles, 1):
             print(f'Processing {idx}/{total} {name}')
@@ -66,7 +69,14 @@ def export_items(output_csv=None):
                 stats = ';'.join(stats_list)
             img = thumbnail_cache.get(name, '')
             available = is_available_item(name, category_list)
-            writer.writerow([name, rarity, category, stats, desc, img, 'true' if available else 'false'])
+            # additional metadata
+            synergy = compute_synergy_tags(category_list, desc)
+            playstyles = compute_playstyles(category_list, synergy)
+            tips = fetch_wiki_tips(name)
+            stats_json = json.dumps(data.get('Stats', []))
+            writer.writerow([name, rarity, category, stats, desc, img,
+                             'true' if available else 'false',
+                             ','.join(synergy), ','.join(playstyles), tips, stats_json])
 
     print(f'Export complete: {output_csv}')
 
