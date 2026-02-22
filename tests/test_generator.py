@@ -2,7 +2,7 @@ import pytest
 
 from ror2tools.generator import (
     satisfies_config, build_rarity_map, select_pool,
-    score_pool, build_pool
+    score_pool, build_pool, generate_pool
 )
 
 

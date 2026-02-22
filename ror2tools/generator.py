@@ -2,6 +2,9 @@ import csv
 import json
 import random
 import os
+import time
+from html import escape
+
 from .utils import DATA_DIR, OUTPUT_DIR, load_synergy_graph
 
 CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
@@ -154,6 +157,11 @@ def select_pool(rarity_map, config, max_attempts=1000):
 
 
 def generate_pool(config=None):
+    """Generate a pool and write output in Markdown format.
+
+    For richer styling users can convert the resulting `.md` file to HTML
+    using external tools such as pandoc.  No web technologies are required.
+    """
     if config is None:
         config = load_config()
     items = load_items()
@@ -162,7 +170,6 @@ def generate_pool(config=None):
     pool = build_pool(items, config)
     # if any advanced parameters exist, compute and show score
     if config.get('style') or config.get('synergy_weight', 0) or config.get('size'):
-        # reuse score_pool to calculate total
         total_score = score_pool(pool, load_synergy_graph(), config.get('style'), config.get('synergy_weight',0))
         print(f'Pool score: {total_score}')
     print('\nGenerated pool:')
@@ -190,6 +197,11 @@ def generate_pool(config=None):
             ])
     print('\nSaved generated_pool.csv')
 
+    # compute score once for possible use in outputs
+    score = 0
+    if config.get('style') or config.get('synergy_weight', 0) or config.get('size'):
+        score = score_pool(pool, load_synergy_graph(), config.get('style'), config.get('synergy_weight',0))
+
     def color_text(text, rarity):
         colors = {
             'Common': '#FFFFFF',
@@ -208,6 +220,7 @@ def generate_pool(config=None):
     md_path = os.path.join(OUTPUT_DIR, 'generated_pool.md')
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write('# Generated Item Pool\n\n')
+        f.write(f'Pool score: {score}\n\n' if score else '')
         f.write('| Name | Rarity | Aspects | Tags | Plays | Image |\n')
         f.write('|------|--------|---------|------|-------|-------|\n')
         for it in pool:
@@ -221,7 +234,3 @@ def generate_pool(config=None):
             f.write(f'| {name_colored} | {rarity_colored} | {aspects} | {tags} | {plays} | {img_md} |\n')
     print('Saved generated_pool.md (open in editor for visual preview)')
     return pool
-
-
-if __name__ == '__main__':
-    generate_pool()

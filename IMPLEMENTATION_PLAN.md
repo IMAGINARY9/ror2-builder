@@ -53,10 +53,48 @@ This document outlines a roadmap for extending the Risk of Rain 2 item tools wit
 
 ## 5. Output Formatting
 
-- [ ] Create HTML template for builds with icons, stats table, and tips.
-- [ ] Extend generator to optionally write `output/build-<timestamp>.html`.
-- [ ] Aggregate statistics (sum %) at top of output.
-- [ ] Add README section showing sample generated build.
+There are several ways to present builds beyond plain text/CSV.  Each has
+different trade‑offs:
+
+* **Enhanced Markdown** (current approach)
+  * Pros: already supported, no extra dependencies, works offline, easily
+    previewable in VS Code or GitHub.
+  * Cons: layout options limited (tables, images), styling is rudimentary.
+
+* **Static HTML** (templating to `.html` files)
+  * Pros: rich styling, responsive design, can embed icons/tips nicely.
+  * Cons: requires a templating library (e.g. Jinja2), CSS assets, and
+    users open files locally.  No server needed if files are purely static.
+  * This is a lightweight alternative to a full server and avoids runtime
+    dependencies besides the template engine.
+
+* **Web server / Flask app**
+  * Pros: interactive UI, query parameters, re‑generate on the fly.
+  * Cons: additional dependency (Flask or similar), need to run a server,
+    more code to maintain, not strictly necessary for simple file
+    generation.
+
+* **Other stacks** (e.g. React/Electron) are possible but likely overkill for
+a CLI tool.
+
+Given the existing scope and desire to keep dependencies minimal, the
+next step could simply be to extend the Markdown output with better
+styling and perhaps a few helper scripts to convert Markdown → HTML (via
+pandoc or similar) if a richer presentation is needed.  If interactive
+functionality becomes important later, a lightweight Flask server could be
+added as an optional extra.
+
+### Updated tasks
+
+- [x] Continue using Markdown for build output; explore CSS-based styling
+  or pandoc conversion for improved appearance (done, generator writes styled
+  Markdown with score).  HTML conversion may be handled externally if needed.
+- [ ] (Optional, low priority) add a built-in static HTML exporter using a
+  templating library; not required for current scope, may be a plugin later.
+- [ ] (Optional future) prototype a Flask-based web UI if interactive
+  selection/search becomes a requirement.
+
+Add README examples for both Markdown and static HTML outputs.
 
 ## 6. Testing & Validation
 
