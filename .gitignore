@@ -1,0 +1,22 @@
+# Python virtual environment
+.venv/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data and cache directories
+data/
+cache/
+output/
+
+# IDE/editor files
+.vscode/
+*.suo
+*.user
+*.ipynb_checkpoints
+
+# OS files
+.DS_Store
+Thumbs.db
