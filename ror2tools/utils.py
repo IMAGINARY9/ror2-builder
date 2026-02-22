@@ -82,6 +82,39 @@ def compute_playstyles(category_list, synergy_tags):
     return styles
 
 
+def compute_synergy_graph(items):
+    """Build a simple adjacency map based on shared synergy tags.
+
+    `items` should be an iterable of dictionaries each containing at least
+    'Name' and 'SynergyTags' (a list).
+    The returned graph is a dict mapping item name to another dict of
+    neighboring item names with a weight (number of shared tags).
+    """
+    graph = {}
+    for a in items:
+        name_a = a.get('Name')
+        tags_a = set(a.get('SynergyTags', []))
+        graph[name_a] = {}
+        for b in items:
+            name_b = b.get('Name')
+            if name_a == name_b:
+                continue
+            shared = tags_a.intersection(b.get('SynergyTags', []))
+            if shared:
+                graph[name_a][name_b] = len(shared)
+    return graph
+
+
+def load_synergy_graph(path=None):
+    if path is None:
+        path = os.path.join(DATA_DIR, 'synergy.json')
+    try:
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
 def is_generic_thumb(url):
     # these patterns indicate non-item icons or placeholders
     return ('AC_Icon' in url

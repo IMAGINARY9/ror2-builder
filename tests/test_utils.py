@@ -30,3 +30,12 @@ def test_fetch_wiki_tips_returns_string():
     tips = fetch_wiki_tips('Crowbar')
     assert isinstance(tips, str)
     # At least one or zero is acceptable; the function may return empty if not found
+
+
+def test_compute_synergy_graph_empty():
+    # graph should be empty when items have no shared tags
+    items = [{'Name': 'A','SynergyTags': []}, {'Name':'B','SynergyTags': []}]
+    from ror2tools.utils import compute_synergy_graph
+    g = compute_synergy_graph(items)
+    assert g == {'A': {}, 'B': {}}
+

@@ -1,9 +1,8 @@
 import csv
 import json
 import random
-
 import os
-from .utils import DATA_DIR, OUTPUT_DIR
+from .utils import DATA_DIR, OUTPUT_DIR, load_synergy_graph
 
 CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
 ITEMS_CSV = os.path.join(DATA_DIR, 'items.csv')
@@ -33,6 +32,63 @@ def load_items(path=ITEMS_CSV):
             r['Playstyles'] = [p for p in r.get('Playstyles', '').split(',') if p]
             items.append(r)
     return items
+
+
+def score_pool(pool, graph, style=None, synergy_weight=0):
+    # base score: count items matching style
+    score = 0
+    if style:
+        for it in pool:
+            if style in it.get('Playstyles', []):
+                score += 1
+    # add pairwise synergy
+    if graph and synergy_weight:
+        for i in range(len(pool)):
+            for j in range(i+1, len(pool)):
+                a = pool[i]['Name']; b = pool[j]['Name']
+                score += graph.get(a, {}).get(b, 0) + graph.get(b, {}).get(a, 0)
+        score *= synergy_weight
+    return score
+
+
+def build_pool(items, config, max_attempts=5000):
+    """Attempt to build a pool respecting style/size/synergy preferences.
+
+    Falls back to simple rarity-based selection if no advanced keys are present.
+    """
+    # detect if advanced generation requested
+    style = config.get('style')
+    size = config.get('size')
+    synergy_weight = config.get('synergy_weight', 0)
+    if style is None and size is None and not synergy_weight:
+        # use legacy selection path
+        rarity_map = build_rarity_map(items)
+        return select_pool(rarity_map, config, max_attempts)
+
+    # determine desired cardinality
+    if size is None:
+        # if no explicit size, use sum of rarity counts if present
+        size = sum(v for k,v in config.items() if isinstance(v, int) and k not in ('require_tags','require_playstyles'))
+    # load graph for scoring
+    graph = load_synergy_graph()
+    # if the graph does not contain our test items, recompute from the provided list
+    if not graph or not set(it['Name'] for it in items).issubset(graph.keys()):
+        try:
+            from .utils import compute_synergy_graph
+            graph = compute_synergy_graph(items)
+        except ImportError:
+            graph = {}
+    best = None
+    best_score = -1
+    for _ in range(max_attempts):
+        if size > len(items):
+            break
+        candidate = random.sample(items, size)
+        sc = score_pool(candidate, graph, style, synergy_weight)
+        if sc > best_score:
+            best_score = sc
+            best = candidate
+    return best if best is not None else []
 
 
 def categorize_item(row):
@@ -97,13 +153,13 @@ def select_pool(rarity_map, config, max_attempts=1000):
     return pool
 
 
-def generate_pool():
-    config = load_config()
+def generate_pool(config=None):
+    if config is None:
+        config = load_config()
     items = load_items()
-    rarity_map = build_rarity_map(items)
 
-    print('Configured counts:', config)
-    pool = select_pool(rarity_map, config)
+    print('Configuration:', config)
+    pool = build_pool(items, config)
     print('\nGenerated pool:')
     for it in pool:
         aspects = categorize_item(it)
@@ -119,7 +175,14 @@ def generate_pool():
         header = ['Name','Rarity','Category','Stats','Desc','Image']
         writer.writerow(header)
         for it in pool:
-            writer.writerow([it['Name'], it['Rarity'], it['Category'], it['Stats'], it['Desc'], it.get('Image','')])
+            writer.writerow([
+                it.get('Name',''),
+                it.get('Rarity',''),
+                it.get('Category',''),
+                it.get('Stats',''),
+                it.get('Desc',''),
+                it.get('Image','')
+            ])
     print('\nSaved generated_pool.csv')
 
     def color_text(text, rarity):
@@ -152,6 +215,7 @@ def generate_pool():
             rarity_colored = color_text(it['Rarity'], it['Rarity'])
             f.write(f'| {name_colored} | {rarity_colored} | {aspects} | {tags} | {plays} | {img_md} |\n')
     print('Saved generated_pool.md (open in editor for visual preview)')
+    return pool
 
 
 if __name__ == '__main__':

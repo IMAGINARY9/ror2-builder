@@ -4,46 +4,52 @@ This document outlines a roadmap for extending the Risk of Rain 2 item tools wit
 
 ## 1. Data Model Expansion
 
-- [ ] Add new fields to `data/items.csv`:
+- [x] Add new fields to `data/items.csv`:
   - `SynergyTags` (comma-separated keywords e.g. `on-hit,crit,bleed`)
   - `Playstyles` (e.g. `tank,glass-cannon,crowd-control`)
-  - `Character` (optional preferred survivor)
+  - `Character` (optional preferred survivor)  <!-- still pending -->
   - `WikiTips` (string scraped from the item page)
-  - Numeric breakdown of stats (columns for damage%, cooldown%, etc.)
-- [ ] Update exporter to compute and write these columns.
-- [ ] Provide a script (`ror2tools/augment.py`) to reprocess existing CSV and fill missing values.
+  - Numeric breakdown of stats (columns for damage%, cooldown%, etc.)  <!-- partially done via StatsJson -->
+- [x] Update exporter to compute and write these columns.
+- [ ] Provide a script (`ror2tools/augment.py`) to reprocess existing CSV and fill missing values.  <!-- future work -->
 
 ## 2. Wiki Scraping Enhancements
 
-- [ ] Implement `fetch_wiki_tips(title)` in `ror2tools/utils.py`:
-  ```python
-  def fetch_wiki_tips(title):
-      # query parse sections, identify 'Tips'/'Usage', return plain text
-  ```
-- [ ] Call this during export and store in `WikiTips` column.
+- [x] Implement `fetch_wiki_tips(title)` in `ror2tools/utils.py` (returns first Tips/Usage text).
+- [x] Call this during export and store in `WikiTips` column.
 - [ ] Optionally download and store drop source tables (categories) for reference.
+
+## 6. Testing & Validation
+
+- [x] Add `tests/` directory with unit tests for:
+  - `utils.lua_parse_items_module`
+  - `fetch_wiki_tips` (mock API responses)
+  - `build_pool` scoring logic
+- [x] Use `pytest` and include in CI pipeline (GitHub Actions).  <!-- tests added locally; CI still pending -->
 
 ## 3. Synergy Graph
 
-- [ ] Define rules for generating synergy tags from categories/stats.
-- [ ] Construct an adjacency matrix or list mapping item→item synergy weights.
-- [ ] Store the graph as JSON under `data/synergy.json`.
-- [ ] Write utilities to score a portfolio of items using graph edges.
+- [x] Define rules for generating synergy tags from categories/stats.  (heuristics already in utils)
+- [x] Construct an adjacency matrix or list mapping item→item synergy weights.
+- [x] Store the graph as JSON under `data/synergy.json`.
+- [x] Write utilities to score a portfolio of items using graph edges.
 
 ## 4. Build Generator Improvements
 
-- [ ] Replace `select_pool` with `build_pool` accepting parameters:
+- [x] Replace `select_pool` with `build_pool` accepting parameters:
   - `style` (tank, damage, mobility, hybrid)
   - `character` (optional)
   - `size` (number of items)
   - `synergy` weight factor
-- [ ] Implement scoring function:
+- [x] Implement scoring function:
   ```python
   score(item) = base_stat_score + synergy_bonus + style_match
   ```
-- [ ] Add additional CLI commands to `main.py`:
+- [x] Add additional CLI commands to `main.py`:
   - `build --style tank --size 10` → prints enhanced build
   - `describe <item>` → outputs wiki tips and stats
+
+> **Note:** simple generation is still available via `generate` and by omitting the advanced fields in `config.json`.
 
 ## 5. Output Formatting
 

@@ -48,6 +48,8 @@ def export_items(output_csv=None):
 
     # write into specified output location
     os.makedirs(os.path.dirname(output_csv), exist_ok=True)
+    # gather exported rows so we can build the synergy graph afterward
+    exported_rows = []
     with open(output_csv, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         # add new metadata columns
@@ -77,6 +79,18 @@ def export_items(output_csv=None):
             writer.writerow([name, rarity, category, stats, desc, img,
                              'true' if available else 'false',
                              ','.join(synergy), ','.join(playstyles), tips, stats_json])
+            exported_rows.append({'Name': name, 'SynergyTags': list(synergy)})
+
+    # after exporting CSV, compute synergy graph and save to file
+    try:
+        from .utils import compute_synergy_graph
+        graph = compute_synergy_graph(exported_rows)
+        graph_path = os.path.join(DATA_DIR, 'synergy.json')
+        with open(graph_path, 'w', encoding='utf-8') as gf:
+            json.dump(graph, gf, ensure_ascii=False, indent=2)
+        print(f'Saved synergy graph: {graph_path}')
+    except Exception as e:
+        print('Warning: failed to compute/save synergy graph', e)
 
     print(f'Export complete: {output_csv}')
 

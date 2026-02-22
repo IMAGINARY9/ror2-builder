@@ -1,7 +1,8 @@
 import pytest
 
 from ror2tools.generator import (
-    satisfies_config, build_rarity_map, select_pool
+    satisfies_config, build_rarity_map, select_pool,
+    score_pool, build_pool
 )
 
 
@@ -42,3 +43,33 @@ def test_build_rarity_map():
     rm = build_rarity_map(items)
     assert set(rm.keys()) == {'Common', 'Legendary'}
     assert len(rm['Common']) == 2
+
+
+def test_score_and_build_pool_basic():
+    # two items share a tag
+    a = make_item('A', 'Common', tags=['crit'])
+    b = make_item('B', 'Common', tags=['crit'])
+    c = make_item('C', 'Common', tags=[])
+    items = [a, b, c]
+    cfg = {'size': 2, 'synergy_weight': 1}
+    pool = build_pool(items, cfg, max_attempts=50)
+    # best pool should contain A and B because they share tag
+    names = {it['Name'] for it in pool}
+    assert names == {'A','B'}
+
+    # style preference should bias selection
+    a['Playstyles']=['tank']
+    cfg2 = {'size': 1, 'style': 'tank'}
+    pool2 = build_pool(items, cfg2, max_attempts=10)
+    assert pool2 and pool2[0]['Name'] == 'A'
+
+
+def test_generate_pool_config_override(tmp_path, monkeypatch):
+    # create a dummy config file and override load_config via monkeypatch
+    from ror2tools.generator import generate_pool, load_items
+    items = [make_item('X','Common',tags=[])]
+    # monkeypatch load_items to return our tiny list
+    monkeypatch.setattr('ror2tools.generator.load_items', lambda: items)
+    cfg = {'size': 1}
+    pool = generate_pool(cfg)
+    assert pool and pool[0]['Name'] == 'X'

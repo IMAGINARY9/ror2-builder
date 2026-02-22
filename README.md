@@ -25,8 +25,14 @@ Run within the project root (ensure the virtual environment is activated). There
 # export the item database
 python main.py export
 
-# generate a random pool
+# generate a random pool (legacy/simple mode, reads only rarity config)
 python main.py generate
+
+# build a pool with advanced scoring options
+python main.py build --size 5 --style frenzy --synergy-weight 2.0
+
+# show description and wiki tips for a given item
+python main.py describe "Crowbar"
 ```
 
 ### Python API
@@ -58,6 +64,18 @@ generate_pool()
     "require_tags": ["on-kill","crit"]
 }
 ```
+
+Advanced pool-building parameters can also be placed in the same file and are used by the `build` command. For example:
+
+```json
+{
+    "size": 5,
+    "style": "frenzy",
+    "synergy_weight": 2.0
+}
+```
+
+When these keys are absent, the generator defaults back to the simple rarity-based behaviour.
 
 - A basic test suite using `pytest` is available under `tests/`.  To run the tests, install pytest in your environment (`pip install pytest`) and execute `pytest` from the project root.
 
