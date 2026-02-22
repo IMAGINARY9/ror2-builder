@@ -67,6 +67,14 @@ The pool generator reads `data/config.json` and supports the following keys:
 - **synergy_weight** – floating multiplier applied to the graph-based
   synergy score when using `build`; higher values favor items with more
   shared tags.
+- **graph_max_ratio** – (optional) upper threshold for tag frequency when
+  building the internal synergy graph.  Tags present in more than this
+  fraction of the item pool are ignored.  Default 0.25.  For very small
+  item sets (where the computed threshold would be less than one item) the
+  ratio filtering is skipped to avoid eliminating every tag.
+- **graph_ignore_tags** – (optional) list of specific tag strings to omit
+  from the graph regardless of frequency.  Defaults to
+  `["utility","damage","healing"]`.
 
 The generator automatically falls back to a **simple rarity-based pool** if
 only the rarity counts are provided (or when using `main.py generate`). No

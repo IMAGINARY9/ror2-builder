@@ -17,6 +17,7 @@ from .utils import (
 import os
 import json
 from .utils import DATA_DIR, OUTPUT_DIR, fetch_wiki_tips, compute_synergy_tags, compute_playstyles
+from .generator import load_config
 
 def export_items(output_csv=None):
     if output_csv is None:
@@ -97,10 +98,13 @@ def export_items(output_csv=None):
     # after exporting CSV, compute synergy graph and save to file
     try:
         from .utils import compute_synergy_graph
-        # exclude very generic tags that appear too often to be informative
+        # load config for graph options
+        cfg = load_config()
+        g_max = cfg.get('graph_max_ratio', 0.25)
+        g_ignore = cfg.get('graph_ignore_tags', ['utility','damage','healing'])
         graph = compute_synergy_graph(exported_rows,
-                                      max_freq_ratio=0.3,
-                                      ignore_tags=['utility','damage','healing'])
+                                      max_freq_ratio=g_max,
+                                      ignore_tags=g_ignore)
         graph_path = os.path.join(DATA_DIR, 'synergy.json')
         with open(graph_path, 'w', encoding='utf-8') as gf:
             json.dump(graph, gf, ensure_ascii=False, indent=2)

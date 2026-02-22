@@ -13,7 +13,7 @@ def test_compute_synergy_tags_basic():
     # crowd control detection
     tags = compute_synergy_tags([], 'Slows enemies on hit')
     assert 'crowd-control' in tags
-    # no tags if nothing matches
+    # generic utility category should be ignored
     tags = compute_synergy_tags(['Utility'], 'Just a utility item')
     assert tags == set()
 
@@ -49,9 +49,52 @@ def test_tag_frequencies_and_filter():
     ]
     freq = compute_tag_frequencies(items)
     assert freq['common'] == 3
-    # graph with default max_ratio=0.3 should drop 'common' (3/3>0.3)
+    # small dataset: ratio threshold < 1, so filtering should be skipped and
+    # weights computed from shared tags
     g = compute_synergy_graph(items)
-    # only foo and bar remain; edges weight accordingly
-    assert g['X'] == {'Y':1}
-    assert g['Z'] == {}
+    assert g['X'] == {'Y': 2, 'Z': 1}
+    assert g['Z'] == {'X': 1, 'Y': 1}
+    # ignoring tags still works
+    g_ignore = compute_synergy_graph(items, ignore_tags=['foo'])
+    # 'foo' removed, only common remains; each pair connected by 1
+    assert g_ignore['X'] == {'Y': 1, 'Z': 1}
+
+
+def test_blacklist_removal():
+    from ror2tools.utils import compute_synergy_tags
+    tags = compute_synergy_tags(['Utility','AIBlacklist','OnKillEffect'], 'Shiny shrine effect', [])
+    assert 'aiblacklist' not in tags
+    assert 'halcyoniteshrine' not in tags
+    assert 'onkilleffect' not in tags
+    # normal tags remain
+    tags2 = compute_synergy_tags([], 'Deals damage on kill', [])
+    assert 'on-kill' in tags2
+
+
+def test_graph_config_params():
+    from ror2tools.utils import compute_synergy_graph
+    items = [
+        {'Name':'A','SynergyTags':['foo','common']},
+        {'Name':'B','SynergyTags':['foo','common']},
+        {'Name':'C','SynergyTags':['bar','common']},
+    ]
+    # small dataset: default ratio threshold <1, so no tags are filtered
+    g1 = compute_synergy_graph(items)
+    # A and B share two tags (foo and common), C shares common with each
+    assert g1['A']['B'] == 2
+    assert g1['A']['C'] == 1
+
+    # if we artificially force a very low ratio, the small-n override keeps the
+    # graph unchanged (max_freq_ratio * n < 1)
+    g_low = compute_synergy_graph(items, max_freq_ratio=0.0)
+    assert g_low == g1
+
+    # high ratio keeps everything too
+    g2 = compute_synergy_graph(items, max_freq_ratio=1.0)
+    assert g2['A']['B'] >= 1
+
+    # ignore_tags should drop foo even though frequency low
+    g3 = compute_synergy_graph(items, ignore_tags=['foo'])
+    # now only 'common' contributes a weight of 1
+    assert g3['A']['B'] == 1
 

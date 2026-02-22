@@ -241,6 +241,9 @@ def generate_pool(config=None):
             if plays_list:
                 # include playstyles in tags parenthetically
                 tag_list.append('(' + ','.join(plays_list) + ')')
+            # omit overly generic tags from display
+            display_blacklist = {'damage', 'utility', 'healing'}
+            tag_list = [t for t in tag_list if t not in display_blacklist]
             # wrap each tag/entry in backticks to highlight
             tags = ', '.join(f'`{t}`' for t in tag_list if t)
             img = it.get('Image','')

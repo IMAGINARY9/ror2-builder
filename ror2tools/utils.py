@@ -87,6 +87,21 @@ def compute_synergy_tags(category_list, desc, stats_list=None):
     # include categories themselves as tags (normalize lower)
     for c in category_list:
         tags.add(c.lower())
+    # remove undesirable tokens
+    cleaned = set()
+    for t in tags:
+        tnorm = t.strip().lower()
+        # ignore technical garbage and blacklist/shrine markers, and generic "effect"
+        if any(x in tnorm for x in ('blacklist', 'shrine', 'worldunique', 'ai', 'effect')):
+            continue
+        # drop generic categories that are too broad
+        if tnorm in ('utility','damage','healing'):
+            continue
+        # drop empty or numeric-only tags
+        if not tnorm or tnorm.isdigit():
+            continue
+        cleaned.add(tnorm)
+    tags = cleaned
 
     # description-based heuristics
     d = desc.lower()
@@ -136,18 +151,25 @@ def compute_tag_frequencies(items):
     return freq
 
 
-def compute_synergy_graph(items, min_freq=1, max_freq_ratio=0.3, ignore_tags=None):
+def compute_synergy_graph(items, min_freq=1, max_freq_ratio=0.25, ignore_tags=None):
     """Build an adjacency map but ignore tags that are too rare/common.
 
     *Tags* with frequency < *min_freq* or > *max_freq_ratio* × len(items) are
     dropped before computing shared-tag weights.  A list of additional
     `ignore_tags` may also be provided (these are removed regardless of
-    frequency).  This reduces noise from extremely common tags like
-    ``utility`` or ``damage``.
+    frequency).  By default we also ignore the most generic combat tags
+    (`utility`, `damage`, `healing`).
     """
     freq = compute_tag_frequencies(items)
     n = len(items)
-    allowed = {t for t,c in freq.items() if c >= min_freq and c <= max_freq_ratio * n}
+    # when dataset is very small the ratio filter becomes too strict
+    # (e.g. 0.25*3 = 0.75), so we only apply it if the threshold >= 1.
+    if max_freq_ratio * n < 1:
+        allowed = {t for t,c in freq.items() if c >= min_freq}
+    else:
+        allowed = {t for t,c in freq.items() if c >= min_freq and c <= max_freq_ratio * n}
+    # always exclude extremely generic tags
+    allowed -= {'utility', 'damage', 'healing'}
     if ignore_tags:
         allowed -= set(ignore_tags)
     graph = {}
