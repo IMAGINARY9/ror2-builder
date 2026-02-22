@@ -47,6 +47,46 @@ export_items()
 generate_pool()
 ```
 
+## Configuration Keys
+
+The pool generator reads `data/config.json` and supports the following keys:
+
+- **rarity counts** (`Common`, `Uncommon`, `Legendary`, `Boss`, `Lunar`,
+  `Void`, `Equipment`).  Numeric values indicate how many items of each
+  rarity to include.  Omit a rarity or set to `0` to exclude it.
+- **require_tags** – list of synergy tags; at least one item in the generated
+  pool must contain one of these tags.  Tags are derived from item
+  descriptions/categories/stats (e.g. `crowd-control`, `healing`).
+- **require_playstyles** – list of playstyle keywords (`frenzy`, `cc`,
+  `mobile`) computed from synergy tags.  Works like `require_tags` but at the
+  playstyle level.
+- **style** – when using the advanced `build` command, a preferred playstyle
+  to bias selection (items matching the style add to the score).
+- **size** – explicit number of items to draw.  If omitted, the sum of
+  rarity counts is used.
+- **synergy_weight** – floating multiplier applied to the graph-based
+  synergy score when using `build`; higher values favor items with more
+  shared tags.
+
+The generator automatically falls back to a **simple rarity-based pool** if
+only the rarity counts are provided (or when using `main.py generate`). No
+special flag is required; the legacy logic (`select_pool`) handles this.
+
+## Output Columns
+
+Generated CSV/Markdown pools include the following columns:
+
+- **Name, Rarity** – item name and rarity.
+- **Aspects** – a set of broad categories (damage, utility, defense, etc.)
+  inferred from stats.
+- **Tags** – raw synergy tags assigned to each item.
+- **Plays** – playstyle keywords derived from tags; e.g. an item with the
+  `on-kill` tag becomes `frenzy` in this column.  These are used by the
+  generator when you specify a `style` or `require_playstyles`.
+- **Image** – thumbnail URL pulled from the wiki.
+
+(See the notes section below for more on thumbnail caching and performance.)
+
 ## Notes
 
 - `data/items.csv` now includes an `Available` column; the pool generator ignores rows marked `false`.

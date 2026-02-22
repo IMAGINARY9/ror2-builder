@@ -159,6 +159,15 @@ def select_pool(rarity_map, config, max_attempts=1000):
 def generate_pool(config=None):
     """Generate a pool and write output in Markdown format.
 
+    The resulting CSV/Markdown includes columns for Name, Rarity, Aspects,
+    Tags, Plays, and Image.  "Plays" refers to playstyle keywords derived
+    from the item's synergies (e.g. 'frenzy', 'cc', or 'mobile').
+
+    ``generate_pool`` uses whatever keys are present in the provided
+    configuration.  If only rarity counts are given it falls back to the
+    legacy simple generator (same as `main.py generate`).  Advanced options
+    such as `style`, `size`, and `synergy_weight` are used only when present.
+
     For richer styling users can convert the resulting `.md` file to HTML
     using external tools such as pandoc.  No web technologies are required.
     """
