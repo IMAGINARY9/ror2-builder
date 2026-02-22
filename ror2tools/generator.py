@@ -160,6 +160,11 @@ def generate_pool(config=None):
 
     print('Configuration:', config)
     pool = build_pool(items, config)
+    # if any advanced parameters exist, compute and show score
+    if config.get('style') or config.get('synergy_weight', 0) or config.get('size'):
+        # reuse score_pool to calculate total
+        total_score = score_pool(pool, load_synergy_graph(), config.get('style'), config.get('synergy_weight',0))
+        print(f'Pool score: {total_score}')
     print('\nGenerated pool:')
     for it in pool:
         aspects = categorize_item(it)

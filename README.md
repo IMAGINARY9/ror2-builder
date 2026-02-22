@@ -28,7 +28,7 @@ python main.py export
 # generate a random pool (legacy/simple mode, reads only rarity config)
 python main.py generate
 
-# build a pool with advanced scoring options
+# build a pool with advanced scoring options (prints a pool score)
 python main.py build --size 5 --style frenzy --synergy-weight 2.0
 
 # show description and wiki tips for a given item
