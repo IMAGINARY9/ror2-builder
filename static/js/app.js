@@ -80,7 +80,6 @@ function setupEventListeners() {
     
     // Pool controls
     document.getElementById('savePool').addEventListener('click', savePool);
-    document.getElementById('loadPool').addEventListener('click', loadPool);
     document.getElementById('clearPool').addEventListener('click', clearPool);
     document.getElementById('randomPool').addEventListener('click', generateRandomPool);
     
@@ -358,53 +357,7 @@ async function savePool() {
     }
 }
 
-async function loadPool() {
-    showStatus('Loading saved pool...', 'info');
-    
-    try {
-        // Ask user which file to load
-        const listResponse = await fetch('/api/pool/list');
-        const listData = await listResponse.json();
-        
-        if (!listData.files || listData.files.length === 0) {
-            showStatus('No saved pools found', 'warning');
-            return;
-        }
-        
-        let filename = prompt(
-            'Enter filename to load (leave empty for latest):\n' +
-            listData.files.map(f => f.filename).join('\n')
-        );
-        if (!filename) {
-            filename = 'latest';
-        }
-        
-        const response = await fetch('/api/pool/load', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename })
-        });
-        
-        if (!response.ok) {
-            const data = await response.json();
-            showStatus('Error: ' + (data.error || 'Failed to load'), 'error');
-            return;
-        }
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            if (data.pool) currentPool = data.pool;
-            renderItems();
-            updateUI();
-            showStatus('Pool loaded successfully!', 'success');
-        } else {
-            showStatus('Error: ' + (data.error || 'Failed to load'), 'error');
-        }
-    } catch (error) {
-        showStatus('Error: ' + error.message, 'error');
-    }
-}
+
 
 async function generateRandomPool() {
     showStatus('Generating random pool...', 'info');
