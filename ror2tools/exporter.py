@@ -11,6 +11,7 @@ from .utils import (
     thumbnail_cache,
     save_cache,
     is_available_item,
+    normalize_image_url,
 )
 
 
@@ -67,7 +68,7 @@ def export_items(output_csv=None):
             stats = ''
             if stats_list:
                 stats = ';'.join(f"{st.get('Stat')}={st.get('Value')}" for st in stats_list)
-            img = thumbnail_cache.get(name, '')
+            img = normalize_image_url(thumbnail_cache.get(name, ''))
             available = is_available_item(name, category_list)
             synergy = compute_synergy_tags(category_list, desc, stats_list)
             playstyles = compute_playstyles(category_list, synergy)

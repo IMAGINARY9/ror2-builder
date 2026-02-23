@@ -14,7 +14,7 @@ from ror2tools.generator import load_items, load_config
 from ror2tools.optimizer import LocalSearchOptimizer
 from ror2tools.scoring import score_pool, score_breakdown
 from ror2tools.history import OptimizationHistory
-from ror2tools.utils import load_synergy_graph
+from ror2tools.utils import load_synergy_graph, normalize_image_url
 
 
 app = Flask(__name__)
@@ -22,13 +22,27 @@ app.config['SECRET_KEY'] = 'ror2-optimization-secret'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Global state
+# thread-safe pool state
 current_pool = []
+pool_lock = threading.Lock()
+
 current_config = {}
 optimizer = None
 optimization_thread = None
 history = OptimizationHistory()
 all_items = []
 synergy_graph = {}
+
+
+def get_pool_copy():
+    with pool_lock:
+        return list(current_pool)
+
+
+def set_pool(new_pool):
+    global current_pool
+    with pool_lock:
+        current_pool = list(new_pool)
 
 
 def initialize_data():
@@ -77,11 +91,8 @@ def get_items():
         csv_rarity = item.get('Rarity', 'Common')
         ui_rarity = rarity_map.get(csv_rarity, 'white')
         
-        # Use consistent image format
-        image_url = item.get('Image', '')
-        if not image_url or image_url == '':
-            # Use placeholder
-            image_url = f"https://static.wikia.nocookie.net/riskofrain2_gamepedia_en/images/d/de/Squid_Polyp.png/revision/latest?cb=20210329071113"
+        # Preserve original image URL if available (includes path and timestamp)
+        image_url = normalize_image_url(item.get('Image', '') or '')
         
         items_data.append({
             'name': item.get('Name', 'Unknown'),
@@ -100,41 +111,35 @@ def get_items():
 @app.route('/api/pool', methods=['GET'])
 def get_pool():
     """Get current pool state."""
+    pool = get_pool_copy()
     return jsonify({
-        'pool': current_pool,
-        'score': score_pool(current_pool, synergy_graph, 
-                           current_config.get('style'), 
+        'pool': pool,
+        'score': score_pool(pool, synergy_graph,
+                           current_config.get('style'),
                            current_config.get('synergy_weight', 0))
     })
 
 
 @app.route('/api/pool', methods=['POST'])
 def update_pool():
-    """Update the current pool."""
-    global current_pool
+    """Replace the entire pool with supplied list of names."""
     data = request.json
-    item_names = data.get('items', [])
-    
-    # Find items by name
+    names = data.get('items', [])
     new_pool = []
-    for name in item_names:
+    for name in names:
         item = next((it for it in all_items if it['Name'] == name), None)
         if item:
             new_pool.append(item)
-    
-    current_pool = new_pool
-    
-    score = score_pool(current_pool, synergy_graph,
+    set_pool(new_pool)
+    score = score_pool(new_pool, synergy_graph,
                       current_config.get('style'),
                       current_config.get('synergy_weight', 0))
-    
-    breakdown = score_breakdown(current_pool, synergy_graph,
+    breakdown = score_breakdown(new_pool, synergy_graph,
                                 current_config.get('style'),
                                 current_config.get('synergy_weight', 0))
-    
     return jsonify({
         'success': True,
-        'pool': current_pool,
+        'pool': new_pool,
         'score': score,
         'breakdown': breakdown
     })
@@ -142,22 +147,18 @@ def update_pool():
 
 @app.route('/api/pool/add', methods=['POST'])
 def add_item():
-    """Add an item to the pool."""
-    global current_pool
+    """Add a named item to the pool, return updated pool."""
     data = request.json
-    item_name = data.get('item')
-    
-    item = next((it for it in all_items if it['Name'] == item_name), None)
-    if item and item not in current_pool:
-        current_pool.append(item)
-        
-        score = score_pool(current_pool, synergy_graph,
-                          current_config.get('style'),
-                          current_config.get('synergy_weight', 0))
-        
-        return jsonify({'success': True, 'score': score})
-    
-    return jsonify({'success': False, 'error': 'Item not found or already in pool'})
+    name = data.get('item')
+    pool = get_pool_copy()
+    item = next((it for it in all_items if it['Name'] == name), None)
+    if item and all(it['Name'] != name for it in pool):
+        pool.append(item)
+        set_pool(pool)
+    score = score_pool(pool, synergy_graph,
+                      current_config.get('style'),
+                      current_config.get('synergy_weight', 0))
+    return jsonify({'success': bool(item), 'score': score, 'pool': pool})
 
 
 @app.route('/api/pool/remove', methods=['POST'])
@@ -173,27 +174,24 @@ def remove_item():
                       current_config.get('style'),
                       current_config.get('synergy_weight', 0))
     
-    return jsonify({'success': True, 'score': score})
+    # include the new pool for client-side syncing
+    return jsonify({'success': True, 'score': score, 'pool': current_pool})
 
 
 @app.route('/api/pool/random', methods=['POST'])
 def generate_random_pool():
     """Generate a random pool based on config."""
-    global current_pool, optimizer
-    
     data = request.json
     config = data.get('config', current_config)
-    
-    optimizer = LocalSearchOptimizer(all_items, config, random_seed=None)
-    current_pool = optimizer._generate_initial_pool()
-    
-    score = score_pool(current_pool, synergy_graph,
+    opt = LocalSearchOptimizer(all_items, config, random_seed=None)
+    pool = opt._generate_initial_pool()
+    set_pool(pool)
+    score = score_pool(pool, synergy_graph,
                       config.get('style'),
                       config.get('synergy_weight', 0))
-    
     return jsonify({
         'success': True,
-        'pool': current_pool,
+        'pool': pool,
         'score': score
     })
 
@@ -365,13 +363,14 @@ def handle_start_optimization(data):
                     return True
                 
                 # Use current pool as starting point
+                initial = get_pool_copy() or None
                 best_pool, final_state = optimizer.optimize(
-                    initial_pool=current_pool if current_pool else None,
+                    initial_pool=initial,
                     callback=callback
                 )
                 
-                # Update global pool
-                current_pool = best_pool
+                # Update global pool under lock
+                set_pool(best_pool)
                 
                 # Send completion
                 socketio.emit('optimization_complete', {
@@ -387,9 +386,8 @@ def handle_start_optimization(data):
                 traceback.print_exc()
                 socketio.emit('optimization_error', {'error': str(e)})
         
-        optimization_thread = threading.Thread(target=optimization_worker)
-        optimization_thread.daemon = True
-        optimization_thread.start()
+        # Launch worker using SocketIO helper (works with eventlet/gevent)
+        socketio.start_background_task(optimization_worker)
         
         emit('optimization_started', {'success': True})
     except Exception as e:

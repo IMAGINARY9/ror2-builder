@@ -44,6 +44,37 @@ def save_tips_cache():
         json.dump(tips_cache, f, ensure_ascii=False, indent=2)
 
 
+def normalize_image_url(raw_url: str) -> str:
+    """Return a cleaned, https image URL or placeholder.
+
+    Strips resizing segments (`/scale-to-width-down/...`), ensures the
+    protocol is HTTPS, and rejects clearly incorrect pictures by
+    falling back to the Squid‑Polyp placeholder. Maintains any
+    timestamp present (`?cb=...`).
+    """
+    placeholder = (
+        "https://static.wikia.nocookie.net/riskofrain2_gamepedia_en/images/d/de/"
+        "Squid_Polyp.png/revision/latest?cb=20210329071113"
+    )
+    if not raw_url:
+        return placeholder
+    url = raw_url.strip()
+    # enforce https
+    if url.startswith('http://'):
+        url = 'https://' + url.split('://', 1)[1]
+    # remove any scale-to-width-down fragments
+    url = re.sub(r'/revision/latest/scale-to-width-down/[^?]+', '/revision/latest', url)
+    # verify filename extension
+    m = re.search(r'/([^/]+\.(png|jpg))', url, flags=re.IGNORECASE)
+    if not m:
+        return placeholder
+    fname = m.group(1)
+    # if the file name looks like a squiddy placeholder or weird personal photo
+    if 'jaime' in fname.lower() or 'garcia' in fname.lower() or 'squid.jpg' in fname.lower():
+        return placeholder
+    return url
+
+
 def fetch_wiki_tips(title):
     """Return the text of the first "Tips" or "Usage" subsection on the item page."""
     if title in tips_cache:

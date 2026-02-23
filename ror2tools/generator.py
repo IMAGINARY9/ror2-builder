@@ -230,7 +230,7 @@ def generate_pool(config=None):
             tag_list = [t for t in tag_list if t not in display_blacklist]
             # wrap each tag/entry in backticks to highlight
             tags = ', '.join(f'`{t}`' for t in tag_list if t)
-            img = it.get('Image','')
+            img = normalize_image_url(it.get('Image','') or '')
             img_md = f'<img src="{img}" alt="{it["Name"]}" width="50"/>' if img else ''
             name_colored = color_text(it['Name'], it['Rarity'])
             rarity_colored = color_text(it['Rarity'], it['Rarity'])
@@ -297,7 +297,7 @@ def export_pool_files(pool, score=0):
             display_blacklist = {'damage', 'utility', 'healing'}
             tag_list = [t for t in tag_list if t not in display_blacklist]
             tags = ', '.join(f'`{t}`' for t in tag_list if t)
-            img = it.get('Image', '')
+            img = normalize_image_url(it.get('Image', '') or '')
             img_md = f'<img src="{img}" alt="{it["Name"]}" width="50"/>' if img else ''
             name_colored = color_text(it['Name'], it['Rarity'])
             rarity_colored = color_text(it['Rarity'], it['Rarity'])

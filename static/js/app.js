@@ -8,6 +8,7 @@ let currentScore = 0;
 let bestScore = 0;
 let activeFilter = 'all';
 let socket = null;
+let dragFromPool = false; // true while dragging a card originating from pool
 let optimizationRunning = false;
 let historyData = [];
 
@@ -93,24 +94,25 @@ function setupEventListeners() {
     dropZone.addEventListener('drop', handleDrop);
     dropZone.addEventListener('dragleave', handleDragLeave);
     
-    // Trash zone for removing items
-    const trashZone = document.getElementById('trashZone');
-    trashZone.addEventListener('dragover', (e) => {
+
+    
+    // allow removing by dropping back onto available items (only when dragging from pool)
+    const itemsGrid = document.getElementById('itemsGrid');
+    itemsGrid.addEventListener('dragover', (e) => {
+        if (!dragFromPool) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        trashZone.classList.add('drag-over');
+        itemsGrid.classList.add('drag-over');
     });
-    trashZone.addEventListener('dragleave', () => {
-        trashZone.classList.remove('drag-over');
+    itemsGrid.addEventListener('dragleave', () => {
+        itemsGrid.classList.remove('drag-over');
     });
-    trashZone.addEventListener('drop', async (e) => {
+    itemsGrid.addEventListener('drop', async (e) => {
+        itemsGrid.classList.remove('drag-over');
+        if (!dragFromPool) return;
         e.preventDefault();
-        trashZone.classList.remove('drag-over');
-        
         const itemName = e.dataTransfer.getData('text/plain');
-        const isRemove = e.dataTransfer.getData('remove') === 'true';
-        
-        if (isRemove || itemName) {
+        if (itemName) {
             await removeItemFromPool(itemName);
         }
     });
@@ -221,6 +223,8 @@ function createItemCard(item) {
 
 // Drag and drop handlers
 function handleDragStart(e) {
+    // basic dragging behaviour used by all cards; pool-specific flag
+    // is added separately in renderPool when creating pool cards.
     e.target.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', e.target.dataset.itemName);
@@ -228,6 +232,7 @@ function handleDragStart(e) {
 
 function handleDragEnd(e) {
     e.target.classList.remove('dragging');
+    dragFromPool = false;
 }
 
 function handleDragOver(e) {
@@ -266,8 +271,9 @@ async function addItemToPool(itemName) {
         const data = await response.json();
         
         if (data.success) {
-            await loadPoolState();
-            renderItems();
+            if (data.pool) {
+                currentPool = data.pool;
+            }
             updateUI();
             showStatus(`Added ${itemName} to pool`, 'success');
         } else {
@@ -289,8 +295,12 @@ async function removeItemFromPool(itemName) {
         const data = await response.json();
         
         if (data.success) {
-            await loadPoolState();
-            renderItems();
+            // optimistic update using returned pool if available
+            if (data.pool) {
+                currentPool = data.pool;
+            } else {
+                currentPool = currentPool.filter(it => it.Name !== itemName && it.name !== itemName);
+            }
             updateUI();
             showStatus(`Removed ${itemName} from pool`, 'success');
         }
@@ -352,7 +362,7 @@ async function loadPool() {
     showStatus('Loading saved pool...', 'info');
     
     try {
-        // Get list of saved files
+        // Ask user which file to load
         const listResponse = await fetch('/api/pool/list');
         const listData = await listResponse.json();
         
@@ -361,11 +371,18 @@ async function loadPool() {
             return;
         }
         
-        // Load the most recent file
+        let filename = prompt(
+            'Enter filename to load (leave empty for latest):\n' +
+            listData.files.map(f => f.filename).join('\n')
+        );
+        if (!filename) {
+            filename = 'latest';
+        }
+        
         const response = await fetch('/api/pool/load', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename: 'latest' })
+            body: JSON.stringify({ filename })
         });
         
         if (!response.ok) {
@@ -377,7 +394,7 @@ async function loadPool() {
         const data = await response.json();
         
         if (data.success) {
-            await loadPoolState();
+            if (data.pool) currentPool = data.pool;
             renderItems();
             updateUI();
             showStatus('Pool loaded successfully!', 'success');
@@ -406,7 +423,9 @@ async function generateRandomPool() {
         const data = await response.json();
         
         if (data.success) {
-            await loadPoolState();
+            if (data.pool) {
+                currentPool = data.pool;
+            }
             renderItems();
             updateUI();
             showStatus('Random pool generated!', 'success');
@@ -596,8 +615,11 @@ function updateUI() {
     document.getElementById('currentScore').textContent = currentScore.toFixed(2);
     document.getElementById('bestScore').textContent = bestScore.toFixed(2);
     
-    // Render pool
+    // Render pool (also updates allItems.in_pool)
     renderPool();
+    
+    // Re-render available grid so its classes reflect the new pool state immediately
+    renderItems();
 }
 
 function renderPool() {
@@ -635,9 +657,11 @@ function renderPool() {
             e.dataTransfer.setData('text/plain', itemData.name);
             e.dataTransfer.setData('remove', 'true');  // Flag for removal
             card.classList.add('dragging');
+            dragFromPool = true; // indicate removal drag
         });
         card.addEventListener('dragend', () => {
             card.classList.remove('dragging');
+            dragFromPool = false;
         });
         
         // Click to remove
