@@ -5,7 +5,7 @@ import os
 import time
 from html import escape
 
-from .utils import DATA_DIR, OUTPUT_DIR, load_synergy_graph
+from .utils import DATA_DIR, OUTPUT_DIR, load_synergy_graph, normalize_image_url
 from .scoring import score_pool, score_breakdown
 
 CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
@@ -21,16 +21,24 @@ def load_config(path=CONFIG_PATH):
 
 def load_items(path=ITEMS_CSV):
     items = []
+    seen = set()  # track names we've already loaded to avoid duplicates
     with open(path, encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for r in reader:
+            name = r.get('Name')
+            # skip duplicate names that sometimes appear in the CSV
+            if name in seen:
+                continue
+            seen.add(name)
+
             if not r.get('Rarity'):
                 continue
             avail = r.get('Available', 'true').strip().lower()
             if avail not in ('', 'true', '1', 'yes'):
                 continue
             # parse new metadata columns into Python structures
-            r['Image'] = r.get('Image', '')
+            from .utils import normalize_image_url
+            r['Image'] = normalize_image_url(r.get('Image', '') or '')
             # comma-separated lists may be empty strings
             r['SynergyTags'] = [t for t in r.get('SynergyTags', '').split(',') if t]
             r['Playstyles'] = [p for p in r.get('Playstyles', '').split(',') if p]

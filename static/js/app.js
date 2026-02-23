@@ -617,8 +617,6 @@ function renderPool() {
             dragFromPool = false;
         });
         
-        // Click to remove
-        card.addEventListener('click', () => removeItemFromPool(itemData.name));
         
         poolZone.appendChild(card);
     });

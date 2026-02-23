@@ -98,3 +98,42 @@ def test_graph_config_params():
     # now only 'common' contributes a weight of 1
     assert g3['A']['B'] == 1
 
+
+def test_no_generic_thumbnails_in_csv():
+    """Exported CSV should not contain any generic or placeholder image URLs."""
+    from ror2tools.utils import is_generic_thumb
+    import csv, os
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'items.csv')
+    with open(path, encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            url = row.get('Image', '').strip()
+            if url:
+                assert not is_generic_thumb(url), f"Found generic thumbnail for {row.get('Name')} -> {url}"
+
+
+def test_hidden_items_unavailable():
+    """Items marked hidden or debug should be considered unavailable."""
+    from ror2tools.utils import is_available_item
+    # category list containing 'Hidden' or 'Debug' should return False
+    assert not is_available_item('Whatever', ['Hidden'])
+    assert not is_available_item('Whatever', ['Debug'])
+    # normal items still available
+    assert is_available_item('Crowbar', ['Damage'])
+
+
+def test_simple_image_url_pattern():
+    """The simple URL builder should produce expected paths.
+
+    We don't hit the network here; just verify the formatting matches the
+    user's description and that the md5 fallback is also included in the
+    generator.
+    """
+    from ror2tools.utils import _build_simple_image_urls
+    urls = list(_build_simple_image_urls('Mocha'))
+    # letter-based entry should appear first and use lowercase letters
+    assert urls[0].endswith('/m/mo/Mocha.png') or urls[0].endswith('/m/mo/Mocha.jpg')
+    # one of the candidates should include an md5-based directory (two hex digits)
+    # for 'Mocha' the md5 hash starts with 6d
+    assert any('/6/6d/' in u for u in urls)
+

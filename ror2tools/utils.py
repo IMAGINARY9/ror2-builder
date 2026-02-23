@@ -229,10 +229,38 @@ def load_synergy_graph(path=None):
 
 
 def is_generic_thumb(url):
-    # these patterns indicate non-item icons or placeholders
-    return ('AC_Icon' in url
-            or '57_Leaf_Clover.png' in url
-            or 'Concept_Art' in url)
+    # these patterns indicate non-item icons, placeholders, or unrelated graphics
+    if not url:
+        return True
+    low = url.lower()
+    # common placeholders or irrelevant assets
+    generic_tokens = [
+        'ac_icon',
+        '57_leaf_clover.png',
+        'concept_art',
+        '_graph_',       # many items have a graph image instead of their icon
+        'railgunner_issue',
+        'plot_',
+        'stats',
+        'issue',
+        'survivors.png', # stage/character artwork
+        'logbook',       # informational images
+        # additional tokens discovered during export debugging
+        'moment',        # generic "A Moment, Fractured" placeholder
+        'fractured',     # part of the bad filename
+        'boost',         # boosthp/boostdamage debug entries
+        'drizzleplayer', # non-item placeholder names
+        'healthdecay',   # placeholder entry
+        'ghost',         # placeholder entry
+        'abandoned_aqueduct', # wiki often returns a random stage image
+        'abyssal_',      # stage backgrounds like Abyssal_Depths
+        'siren',         # Siren's Call screenshot
+        'graveyard',     # Ship Graveyard etc
+        'sundered',      # Sundered Grove
+        'sky_meadow',    # Sky Meadow background
+        'acrid.png',      # API returns Acrid icon when no thumbnail exists
+    ]
+    return any(tok in low for tok in generic_tokens)
 
 
 def lua_parse_items_module(text):
@@ -329,6 +357,34 @@ def fetch_equipment_module():
     return fetch_module('Module:Equipment/Data')
 
 
+
+# a couple of helper routines to avoid hitting the API when a URL can be
+# constructed deterministically.  the wiki stores images under a pair of
+# directory names derived from the file name; historically this was the first
+# letter and the first two letters, but the canonical scheme today is the
+# md5 hash of the filename.  we try the simpler letter-based location first
+# (what the user described) and fall back to the md5 path if necessary.
+
+def _build_simple_image_urls(title):
+    """Yield candidate URLs for the given wiki title.
+
+    The caller is responsible for checking the URL via a HEAD request.  We
+    return both the naive letter-based path (which often works) and the
+    md5-hash path used by the fandom CDN.
+    """
+    fn = title.replace(' ', '_')
+    # first try plain directories based on the name characters
+    first = fn[0].lower() if fn else ''
+    first2 = fn[:2].lower() if len(fn) >= 2 else first
+    for ext in ('png', 'jpg'):
+        yield f'https://static.wikia.nocookie.net/riskofrain2_gamepedia_en/images/{first}/{first2}/{fn}.{ext}'
+    # now the md5-based path
+    import hashlib
+    h = hashlib.md5(fn.encode('utf-8')).hexdigest()
+    for ext in ('png', 'jpg'):
+        yield f'https://static.wikia.nocookie.net/riskofrain2_gamepedia_en/images/{h[0]}/{h[:2]}/{fn}.{ext}'
+
+
 def fetch_thumbnails_bulk(titles, size=200):
     result = {}
     chunk_size = 50
@@ -341,10 +397,22 @@ def fetch_thumbnails_bulk(titles, size=200):
         pages = resp.json().get('query', {}).get('pages', {})
         for p in pages.values():
             title = p.get('title')
-            if 'thumbnail' in p:
-                url = p['thumbnail']['source']
-                if not is_generic_thumb(url):
-                    result[title] = url
+            # try to construct a URL before trusting the API result; this is not
+            # faster than the bulk query itself but avoids returning placeholders
+            # on missing pages and keeps subsequent runs deterministic.
+            for candidate in _build_simple_image_urls(title):
+                try:
+                    r = requests.head(candidate)
+                    if r.status_code == 200 and not is_generic_thumb(candidate):
+                        result[title] = candidate
+                        break
+                except Exception:
+                    pass
+            else:
+                if 'thumbnail' in p:
+                    url = p['thumbnail']['source']
+                    if not is_generic_thumb(url):
+                        result[title] = url
     return result
 
 
@@ -368,7 +436,17 @@ def fetch_thumbnail_parallel(titles):
 
 
 def fetch_thumbnail(title, size=200):
-    # same code from previous script omitted for brevity; copy entire function body
+    # First try deterministic paths that don't require an API call.  This
+    # covers the pattern the user mentioned (first-letter/first-two-letters)
+    # as well as the md5-hash based layout used by the CDN.
+    for candidate in _build_simple_image_urls(title):
+        try:
+            r = requests.head(candidate)
+            if r.status_code == 200 and not is_generic_thumb(candidate):
+                return candidate
+        except Exception:
+            pass
+    # fall back to API queries for anything more complicated
     params = {'action': 'query', 'titles': title, 'prop': 'pageimages',
               'pithumbsize': size, 'format': 'json'}
     resp = requests.get(API_URL, params=params)
@@ -420,7 +498,7 @@ def fetch_thumbnail(title, size=200):
             for q in resp3.json().get('query', {}).get('pages', {}).values():
                 if 'imageinfo' in q:
                     url = q['imageinfo'][0].get('url','')
-                    if '57_Leaf_Clover' not in url:
+                    if '57_Leaf_Clover' not in url and not is_generic_thumb(url):
                         return url
     base = title.replace(' ', '_')
     for ext in ['png', 'jpg']:
@@ -431,7 +509,21 @@ def fetch_thumbnail(title, size=200):
         resp4.raise_for_status()
         for q in resp4.json().get('query', {}).get('pages', {}).values():
             if 'imageinfo' in q:
-                return q['imageinfo'][0].get('url','')
+                url = q['imageinfo'][0].get('url','')
+                if not is_generic_thumb(url):
+                    return url
+    # attempt to scrape wiki page for an appropriate icon
+    try:
+        pageurl = f"https://riskofrain2.fandom.com/wiki/{title.replace(' ', '_')}"
+        resp_page = requests.get(pageurl)
+        resp_page.raise_for_status()
+        soup = BeautifulSoup(resp_page.text, 'html.parser')
+        for img in soup.find_all('img'):
+            src = img.get('src','')
+            if title.replace(' ','_').lower() in src.lower() and not is_generic_thumb(src):
+                return src
+    except Exception:
+        pass
     # md5 fallback
     import hashlib
     fn = base
@@ -448,11 +540,17 @@ def fetch_thumbnail(title, size=200):
 
 
 def is_available_item(name, category_list):
+    # filter out developer/debug or otherwise unusable items
+    # - the API often lists hidden/test entries which are not relevant to players
+    # - stages, keys, scraps, or worldunique items are also excluded
     if any('Scrap' in name for _ in [None]):
         return False
     if 'Key' in name:
         return False
     if any('Scrap' in c for c in category_list):
+        return False
+    # hide any items explicitly marked hidden or debug in the category list
+    if any('Hidden' in c or 'Debug' in c for c in category_list):
         return False
     if 'WorldUnique' in category_list:
         return False

@@ -33,10 +33,12 @@ def export_items(output_csv=None):
     module_items.update(equip_items)
     print('parsed items count', len(module_items))
 
-    all_titles = sorted(items + list(equip_items.keys()))
-    # purge generic urls from cache so they can be refetched
+    # ensure each title appears only once in the final list; the API occasionally duplicates
+    all_titles = sorted(dict.fromkeys(items + list(equip_items.keys())))
+    # purge generic or placeholder URLs from cache so they can be refetched
+    from .utils import is_generic_thumb
     for k, v in list(thumbnail_cache.items()):
-        if v and 'AC_Icon' in v:
+        if v and is_generic_thumb(v):
             del thumbnail_cache[k]
     missing = [t for t in all_titles if t not in thumbnail_cache]
     if missing:
