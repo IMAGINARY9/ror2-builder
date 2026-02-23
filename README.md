@@ -2,6 +2,24 @@
 
 This repository contains utilities for exporting item data from the Risk of Rain 2 wiki, generating random item pools, and **optimizing builds** using iterative local search algorithms.
 
+## 🌐 Web Interface (Recommended)
+
+The easiest way to use the optimizer is through the **drag-and-drop web interface**:
+
+```powershell
+# Start the web server
+python app.py
+
+# Open http://localhost:5000 in your browser
+```
+
+**Features:**
+- 🎯 Drag-and-drop item management
+- 📊 Real-time optimization with live score updates
+- 📈 Interactive history charts
+- 🎨 Visual rarity-based filters
+- ⚡ WebSocket-powered progress tracking
+
 ## Structure
 
 - `ror2tools/` – package containing core logic
@@ -12,6 +30,9 @@ This repository contains utilities for exporting item data from the Risk of Rain
   - **`scoring.py`** – pool scoring functions
   - **`interactive.py`** – interactive CLI for optimization
   - **`history.py`** – optimization history tracking and visualization
+- **`app.py`** – Flask web application with drag-and-drop interface
+- `templates/` – HTML templates for web interface
+- `static/` – CSS and JavaScript for web interface
 - `export_items.py` – simple CLI wrapper that calls `ror2tools.export_items`
 - `random_items.py` – simple CLI wrapper that calls `ror2tools.generate_pool`
 - `data/` – persistent data store
@@ -20,11 +41,11 @@ This repository contains utilities for exporting item data from the Risk of Rain
 - `cache/` – thumbnail cache (`thumbnail_cache.json`)
 - `output/` – generated outputs (`generated_pool.csv`, `generated_pool.md`, `optimization_history.json`, `optimization_history.png`)
 
-## Available Commands
+## CLI Commands
 
 Run within the project root (ensure the virtual environment is activated).
 
-**Unified CLI (preferred)**
+**Unified CLI**
 ```powershell
 # export the item database
 python main.py export
@@ -35,13 +56,13 @@ python main.py generate
 # build a pool with advanced scoring options (prints a pool score)
 python main.py build --size 5 --style frenzy --synergy-weight 2.0
 
-# ✨ NEW: optimize a pool using local search (batch mode)
+# optimize a pool using local search (batch mode)
 python main.py optimize --max-iterations 100 --k-opt 1
 
-# ✨ NEW: optimize with interactive mode (pause after each iteration)
+# optimize with interactive mode (pause after each iteration)
 python main.py optimize --interactive --max-iterations 100
 
-# ✨ NEW: optimize and generate visualization
+# optimize and generate visualization
 python main.py optimize --visualize --max-iterations 50 --synergy-weight 2.0
 
 # show description and wiki tips for a given item
