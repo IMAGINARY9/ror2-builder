@@ -101,6 +101,7 @@ def get_items():
             'image': image_url,
             'tags': item.get('SynergyTags', []) or [],
             'playstyles': item.get('Playstyles', []) or [],
+            'category': item.get('Category', ''),
             'desc': item.get('Desc', ''),
             'in_pool': item.get('Name', '') in pool_names
         })
@@ -319,6 +320,86 @@ def load_pool_from_file():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/optimize/step', methods=['POST'])
+def optimize_step():
+    """Perform a single optimization iteration."""
+    try:
+        data = request.json
+        pool_names = data.get('pool', [])
+        config = data.get('config', current_config)
+        
+        # Convert names to items
+        pool = []
+        for name in pool_names:
+            item = next((it for it in all_items if it.get('Name') == name), None)
+            if item:
+                pool.append(item)
+        
+        if not pool:
+            return jsonify({'improved': False, 'error': 'Empty pool'}), 400
+        
+        # Get k_opt from config - handle both nested and flat structures
+        if 'optimization' in config and isinstance(config['optimization'], dict):
+            k_opt = config['optimization'].get('k_opt', 1)
+        else:
+            k_opt = config.get('k_opt', 1)
+            
+        synergy_weight = config.get('synergy_weight', 0.5)
+        
+        # Create optimizer
+        optimizer = LocalSearchOptimizer(
+            all_items, 
+            config,
+            k_opt=k_opt,
+            max_iterations=1  # Just one step
+        )
+        optimizer.graph = synergy_graph
+        optimizer.style = config.get('style')
+        optimizer.synergy_weight = synergy_weight
+        
+        # Get current score
+        current_score = score_pool(pool, synergy_graph,
+                                   config.get('style'),
+                                   synergy_weight)
+        
+        # Find best swap
+        swaps = optimizer._generate_neighborhood(pool, k=k_opt)
+        if not swaps:
+            return jsonify({'improved': False, 'message': 'No valid swaps available'})
+        
+        evaluated_swaps = optimizer._evaluate_swaps(pool, swaps)
+        
+        if not evaluated_swaps or evaluated_swaps[0].delta <= 0:
+            return jsonify({'improved': False, 'message': 'No improvements found'})
+        
+        # Apply best swap
+        best_swap = evaluated_swaps[0]
+        new_pool = optimizer._apply_swap(pool, best_swap)
+        new_score = score_pool(new_pool, synergy_graph,
+                              config.get('style'),
+                              synergy_weight)
+        
+        # Update global current_pool
+        global current_pool
+        current_pool = new_pool
+        
+        return jsonify({
+            'improved': True,
+            'pool': [item['Name'] for item in new_pool],
+            'score': float(new_score),
+            'delta': float(best_swap.delta),
+            'swap': {
+                'removed': [item['Name'] for item in best_swap.remove],
+                'added': [item['Name'] for item in best_swap.add]
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'improved': False, 'error': str(e)}), 500
 
 
 @socketio.on('start_optimization')

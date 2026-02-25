@@ -322,6 +322,39 @@ section {
     font-size: 1em;
 }
 
+.control-group .help-text {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin-top: -2px;
+}
+
+.sort-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.sort-controls label {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+.sort-controls select {
+    padding: 6px 12px;
+    border: 1px solid var(--bg-dark);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
+.sort-controls select:hover {
+    border-color: var(--accent);
+}
+
 .control-buttons {
     display: flex;
     gap: 10px;
@@ -409,14 +442,59 @@ section {
 }
 
 .history-entry {
-    display: grid;
-    grid-template-columns: 100px 150px 150px 1fr;
-    gap: 15px;
-    padding: 10px;
+    padding: 12px;
     background: var(--bg-tertiary);
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     border-radius: var(--border-radius);
     font-size: 0.9em;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.95em;
+}
+
+.history-swap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+.history-removed,
+.history-added {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.history-item-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    object-fit: cover;
+}
+
+.history-item-name {
+    display: inline-block;
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+.history-arrow {
+    font-size: 1.2em;
+    color: var(--text-muted);
+}
+
+.history-delta {
+    font-size: 0.85em;
+    color: var(--accent);
+    margin-top: 4px;
 }
 
 /* Modal */

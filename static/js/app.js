@@ -6,11 +6,12 @@ let allItems = [];
 let currentPool = [];
 let currentScore = 0;
 let bestScore = 0;
+let iterationCount = 0; // Tracks all user interactions
 let activeFilter = 'all';
 let socket = null;
 let dragFromPool = false; // true while dragging a card originating from pool
 let optimizationRunning = false;
-let historyData = [];
+let currentOptimizer = null; // reference to current optimization session
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -61,9 +62,7 @@ async function loadConfig() {
     
     // Update UI with config values
     document.getElementById('kOpt').value = config.optimization?.k_opt || 1;
-    document.getElementById('maxIterations').value = config.optimization?.max_iterations || 100;
-    document.getElementById('convergence').value = config.optimization?.convergence_threshold || 10;
-    document.getElementById('synergyWeight').value = config.synergy_weight || 0;
+    document.getElementById('synergyWeight').value = config.synergy_weight || 0.5;
 }
 
 // Setup event listeners
@@ -83,9 +82,8 @@ function setupEventListeners() {
     document.getElementById('clearPool').addEventListener('click', clearPool);
     document.getElementById('randomPool').addEventListener('click', generateRandomPool);
     
-    // Optimization controls
-    document.getElementById('startOptimization').addEventListener('click', startOptimization);
-    document.getElementById('stopOptimization').addEventListener('click', stopOptimization);
+    // Optimization controls  
+    document.getElementById('nextIteration').addEventListener('click', nextIteration);
     
     // Pool drop zone
     const dropZone = document.getElementById('poolDropZone');
@@ -273,6 +271,33 @@ async function addItemToPool(itemName) {
             if (data.pool) {
                 currentPool = data.pool;
             }
+            
+            // Reset optimizer state when user manually edits pool
+            if (currentOptimizer) {
+                currentOptimizer = null;
+            }
+            
+            // Update scores
+            const oldScore = currentScore;
+            currentScore = data.score || 0;
+            bestScore = Math.max(bestScore, currentScore);
+            const delta = currentScore - oldScore;
+            
+            iterationCount++;
+            document.getElementById('iterationCount').textContent = iterationCount;
+            
+            // Add to history
+            addHistoryEntry({
+                iteration: iterationCount,
+                score: currentScore,
+                best_score: bestScore,
+                last_swap: {
+                    removed: [],
+                    added: [itemName]
+                },
+                delta: delta
+            });
+            
             updateUI();
             showStatus(`Added ${itemName} to pool`, 'success');
         } else {
@@ -300,6 +325,33 @@ async function removeItemFromPool(itemName) {
             } else {
                 currentPool = currentPool.filter(it => it.Name !== itemName && it.name !== itemName);
             }
+            
+            // Reset optimizer state when user manually edits pool
+            if (currentOptimizer) {
+                currentOptimizer = null;
+            }
+            
+            // Update scores
+            const oldScore = currentScore;
+            currentScore = data.score || 0;
+            bestScore = Math.max(bestScore, currentScore);
+            const delta = currentScore - oldScore;
+            
+            iterationCount++;
+            document.getElementById('iterationCount').textContent = iterationCount;
+            
+            // Add to history
+            addHistoryEntry({
+                iteration: iterationCount,
+                score: currentScore,
+                best_score: bestScore,
+                last_swap: {
+                    removed: [itemName],
+                    added: []
+                },
+                delta: delta
+            });
+            
             updateUI();
             showStatus(`Removed ${itemName} from pool`, 'success');
         }
@@ -310,6 +362,8 @@ async function removeItemFromPool(itemName) {
 
 async function clearPool() {
     // No confirmation dialog - just clear
+    resetOptimization();
+    
     try {
         const response = await fetch('/api/pool', {
             method: 'POST',
@@ -362,6 +416,9 @@ async function savePool() {
 async function generateRandomPool() {
     showStatus('Generating random pool...', 'info');
     
+    // Reset optimization state
+    resetOptimization();
+    
     try {
         const response = await fetch('/api/pool/random', {
             method: 'POST',
@@ -389,23 +446,78 @@ async function generateRandomPool() {
 }
 
 // Optimization
-async function startOptimization() {
+async function nextIteration() {
     if (currentPool.length === 0) {
         showStatus('Add items to pool first!', 'warning');
         return;
     }
     
-    const config = await getCurrentConfig();
+    if (!currentOptimizer) {
+        // Initialize optimizer on first iteration
+        currentOptimizer = { iteration: 0, config: await getCurrentConfig() };
+    }
     
-    socket.emit('start_optimization', { config });
+    showStatus('Running iteration...', 'info');
     
-    // Clear previous history
-    historyData = [];
-    document.getElementById('historyTable').innerHTML = '';
+    try {
+        const response = await fetch('/api/optimize/step', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                pool: currentPool.map(item => item.Name || item.name),
+                config: currentOptimizer.config,
+                iteration: currentOptimizer.iteration
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.improved) {
+            // Update pool with improved version
+            currentPool = data.pool.map(name => allItems.find(item => item.name === name || item.Name === name)).filter(item => item);
+            currentScore = data.score || 0;
+            bestScore = Math.max(bestScore, currentScore);
+            
+            const delta = data.delta || 0;
+            
+            // Increment iteration counter
+            iterationCount++;
+            document.getElementById('iterationCount').textContent = iterationCount;
+            
+            currentOptimizer.iteration = iterationCount;
+            
+            // Update UI
+            renderItems();
+            updateUI();
+            
+            // Add to history
+            addHistoryEntry({
+                iteration: iterationCount,
+                score: currentScore,
+                best_score: bestScore,
+                last_swap: data.swap,
+                delta: delta
+            });
+            
+            showStatus(
+                `Iteration ${currentOptimizer.iteration}: Improved to ${currentScore.toFixed(2)} (Δ: +${delta.toFixed(2)})`,
+                'success'
+            );
+        } else {
+            showStatus('No improvement found. Pool is optimized!', 'info');
+            document.getElementById('nextIteration').disabled = true;
+        }
+    } catch (error) {
+        showStatus('Error: ' + error.message, 'error');
+    }
 }
 
-function stopOptimization() {
-    socket.emit('stop_optimization');
+function resetOptimization() {
+    currentOptimizer = null;
+    iterationCount = 0;
+    document.getElementById('iterationCount').textContent = '0';
+    document.getElementById('historyTable').innerHTML = '';
+    showStatus('Optimization reset', 'info');
 }
 
 function updateOptimizationProgress(data) {
@@ -414,10 +526,6 @@ function updateOptimizationProgress(data) {
     bestScore = data.best_score;
     document.getElementById('currentScore').textContent = currentScore.toFixed(2);
     document.getElementById('bestScore').textContent = bestScore.toFixed(2);
-    
-    // Update progress bar
-    const progress = (data.iteration / parseInt(document.getElementById('maxIterations').value)) * 100;
-    document.getElementById('progressBar').style.width = progress + '%';
     
     // Update status
     showStatus(
@@ -462,15 +570,47 @@ function addHistoryEntry(data) {
     entry.className = 'history-entry';
     
     const swap = data.last_swap;
-    const swapText = swap 
-        ? `Removed: ${swap.removed.join(', ')}<br>Added: ${swap.added.join(', ')}<br>Δ: ${swap.delta.toFixed(2)}`
-        : 'No swap';
+    const delta = data.delta || (swap && swap.delta) || 0;
+    
+    let swapHtml = '';
+    if (swap) {
+        // Create images for removed items
+        const removedHtml = swap.removed.map(itemName => {
+            const item = allItems.find(it => (it.Name || it.name) === itemName);
+            if (item && (item.image || item.Image)) {
+                return `<img src="${item.image || item.Image}" alt="${itemName}" title="${itemName}" class="history-item-icon">`;
+            }
+            return `<span class="history-item-name">${itemName}</span>`;
+        }).join(' ');
+        
+        // Create images for added items
+        const addedHtml = swap.added.map(itemName => {
+            const item = allItems.find(it => (it.Name || it.name) === itemName);
+            if (item && (item.image || item.Image)) {
+                return `<img src="${item.image || item.Image}" alt="${itemName}" title="${itemName}" class="history-item-icon">`;
+            }
+            return `<span class="history-item-name">${itemName}</span>`;
+        }).join(' ');
+        
+        swapHtml = `
+            <div class="history-swap">
+                <div class="history-removed">${removedHtml}</div>
+                <div class="history-arrow">→</div>
+                <div class="history-added">${addedHtml}</div>
+            </div>
+            <div class="history-delta">Δ: ${delta.toFixed(2)}</div>
+        `;
+    } else {
+        swapHtml = '<div>No swap</div>';
+    }
     
     entry.innerHTML = `
-        <div><strong>Iter ${data.iteration}</strong></div>
-        <div>Score: ${data.score.toFixed(2)}</div>
-        <div>Best: ${data.best_score.toFixed(2)}</div>
-        <div>${swapText}</div>
+        <div class="history-header">
+            <strong>Iter ${data.iteration}</strong>
+            <span>Score: ${(data.score || 0).toFixed(2)}</span>
+            <span>Best: ${(data.best_score || 0).toFixed(2)}</span>
+        </div>
+        ${swapHtml}
     `;
     
     table.insertBefore(entry, table.firstChild);
@@ -479,87 +619,6 @@ function addHistoryEntry(data) {
     while (table.children.length > 20) {
         table.removeChild(table.lastChild);
     }
-}
-
-function drawHistoryChart() {
-    const canvas = document.getElementById('historyChart');
-    const ctx = canvas.getContext('2d');
-    
-    canvas.width = canvas.offsetWidth;
-    canvas.height = 300;
-    
-    if (historyData.length === 0) return;
-    
-    const padding = 40;
-    const width = canvas.width - 2 * padding;
-    const height = canvas.height - 2 * padding;
-    
-    // Clear canvas
-    ctx.fillStyle = '#3d3d3d';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Find min/max
-    const scores = historyData.map(d => d.score);
-    const minScore = Math.min(...scores);
-    const maxScore = Math.max(...scores);
-    const range = maxScore - minScore || 1;
-    
-    // Draw axes
-    ctx.strokeStyle = '#e0e0e0';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(padding, padding);
-    ctx.lineTo(padding, height + padding);
-    ctx.lineTo(width + padding, height + padding);
-    ctx.stroke();
-    
-    // Draw line
-    ctx.strokeStyle = '#4a9eff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    
-    historyData.forEach((data, i) => {
-        const x = padding + (i / (historyData.length - 1)) * width;
-        const y = padding + height - ((data.score - minScore) / range) * height;
-        
-        if (i === 0) {
-            ctx.moveTo(x, y);
-        } else {
-            ctx.lineTo(x, y);
-        }
-    });
-    
-    ctx.stroke();
-    
-    // Draw best score line
-    ctx.strokeStyle = '#4caf50';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    
-    historyData.forEach((data, i) => {
-        const x = padding + (i / (historyData.length - 1)) * width;
-        const y = padding + height - ((data.bestScore - minScore) / range) * height;
-        
-        if (i === 0) {
-            ctx.moveTo(x, y);
-        } else {
-            ctx.lineTo(x, y);
-        }
-    });
-    
-    ctx.stroke();
-    ctx.setLineDash([]);
-    
-    // Draw labels
-    ctx.fillStyle = '#e0e0e0';
-    ctx.font = '12px Arial';
-    ctx.fillText('Iteration', width / 2 + padding, height + padding + 30);
-    ctx.save();
-    ctx.translate(10, height / 2 + padding);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText('Score', 0, 0);
-    ctx.restore();
 }
 
 // UI updates
@@ -584,12 +643,17 @@ function renderPool() {
     
     if (currentPool.length === 0) {
         if (emptyState) emptyState.style.display = 'block';
+        // Still need to update available items status when pool is empty
+        refreshAvailableItemsStatus();
         return;
     }
     
     if (emptyState) emptyState.style.display = 'none';
     
-    currentPool.forEach(item => {
+    // Sort pool items by category (damage, utility, healing)
+    const sortedPool = sortPoolByCategory([...currentPool]);
+    
+    sortedPool.forEach(item => {
         // Create card from item data
         const itemData = {
             name: item.Name || item.name,
@@ -597,6 +661,7 @@ function renderPool() {
             image: item.Image || item.image,
             tags: item.SynergyTags || item.tags || [],
             playstyles: item.Playstyles || item.playstyles || [],
+            category: item.Category || item.category || '',
             desc: item.Desc || item.desc || '',
             in_pool: true
         };
@@ -625,6 +690,37 @@ function renderPool() {
     refreshAvailableItemsStatus();
 }
 
+// Sort pool items by category priority
+function sortPoolByCategory(items) {
+    const getCategoryScore = (item) => {
+        const tags = (item.SynergyTags || item.tags || []).join(',').toLowerCase();
+        const categories = (item.Category || item.category || '').toLowerCase();
+        const combined = tags + ',' + categories;
+        
+        // Damage items first
+        if (combined.includes('damage') || combined.includes('on-kill') || combined.includes('onkilleffect')) return 0;
+        // Movement/utility items second  
+        if (combined.includes('utility') || combined.includes('movement') || combined.includes('speed')) return 1;
+        // Healing/defense third
+        if (combined.includes('healing') || combined.includes('health') || combined.includes('barrier')) return 2;
+        // Everything else
+        return 3;
+    };
+    
+    return items.sort((a, b) => {
+        const scoreA = getCategoryScore(a);
+        const scoreB = getCategoryScore(b);
+        
+        if (scoreA !== scoreB) {
+            return scoreA - scoreB;
+        }
+        // Secondary sort by name
+        const nameA = a.Name || a.name || '';
+        const nameB = b.Name || b.name || '';
+        return nameA.localeCompare(nameB);
+    });
+}
+
 function refreshAvailableItemsStatus() {
     const poolNames = new Set(currentPool.map(it => it.Name || it.name));
     
@@ -647,8 +743,8 @@ function refreshAvailableItemsStatus() {
 }
 
 function updateOptimizationButtons() {
-    document.getElementById('startOptimization').disabled = optimizationRunning;
-    document.getElementById('stopOptimization').disabled = !optimizationRunning;
+    const isRunning = currentOptimizer !== null;
+    document.getElementById('nextIteration').disabled = currentPool.length === 0;
 }
 
 function showStatus(message, type = 'info') {
@@ -686,9 +782,7 @@ async function getCurrentConfig() {
     return {
         ...baseConfig,
         optimization: {
-            k_opt: parseInt(document.getElementById('kOpt').value),
-            max_iterations: parseInt(document.getElementById('maxIterations').value),
-            convergence_threshold: parseInt(document.getElementById('convergence').value)
+            k_opt: parseInt(document.getElementById('kOpt').value)
         },
         synergy_weight: parseFloat(document.getElementById('synergyWeight').value)
     };
