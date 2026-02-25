@@ -5,10 +5,7 @@ from .utils import (
     fetch_item_list,
     fetch_items_module,
     fetch_equipment_module,
-    fetch_thumbnails_bulk,
-    fetch_thumbnail_parallel,
-    fetch_thumbnail,
-    is_generic_thumb,
+    get_item_image,
     is_available_item,
     lua_parse_items_module,
 )

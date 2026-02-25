@@ -14,7 +14,7 @@ from ror2tools.generator import load_items, load_config
 from ror2tools.optimizer import LocalSearchOptimizer
 from ror2tools.scoring import score_pool, score_breakdown
 from ror2tools.history import OptimizationHistory
-from ror2tools.utils import load_synergy_graph, normalize_image_url
+from ror2tools.utils import load_synergy_graph
 
 
 app = Flask(__name__)
@@ -91,8 +91,8 @@ def get_items():
         csv_rarity = item.get('Rarity', 'Common')
         ui_rarity = rarity_map.get(csv_rarity, 'white')
         
-        # Preserve original image URL if available (includes path and timestamp)
-        image_url = normalize_image_url(item.get('Image', '') or '')
+        # Use image URL directly from CSV
+        image_url = item.get('Image', '') or ''
         
         items_data.append({
             'name': item.get('Name', 'Unknown'),

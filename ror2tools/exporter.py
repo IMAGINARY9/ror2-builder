@@ -6,12 +6,8 @@ from .utils import (
     fetch_item_list,
     fetch_items_module,
     fetch_equipment_module,
-    fetch_thumbnails_bulk,
-    fetch_thumbnail_parallel,
-    thumbnail_cache,
-    save_cache,
+    get_item_image,
     is_available_item,
-    normalize_image_url,
 )
 
 
@@ -35,21 +31,6 @@ def export_items(output_csv=None):
 
     # ensure each title appears only once in the final list; the API occasionally duplicates
     all_titles = sorted(dict.fromkeys(items + list(equip_items.keys())))
-    # purge generic or placeholder URLs from cache so they can be refetched
-    from .utils import is_generic_thumb
-    for k, v in list(thumbnail_cache.items()):
-        if v and is_generic_thumb(v):
-            del thumbnail_cache[k]
-    missing = [t for t in all_titles if t not in thumbnail_cache]
-    if missing:
-        print(f'Fetching thumbnails for {len(missing)} entries in bulk...')
-        bulk = fetch_thumbnails_bulk(missing)
-        thumbnail_cache.update(bulk)
-        remaining = [t for t in missing if not thumbnail_cache.get(t)]
-        if remaining:
-            print(f'Fetching {len(remaining)} remaining thumbnails in parallel...')
-            fetch_thumbnail_parallel(remaining)
-        save_cache()
 
     # write into specified output location (parallelize heavy work)
     os.makedirs(os.path.dirname(output_csv), exist_ok=True)
@@ -70,7 +51,10 @@ def export_items(output_csv=None):
             stats = ''
             if stats_list:
                 stats = ';'.join(f"{st.get('Stat')}={st.get('Value')}" for st in stats_list)
-            img = normalize_image_url(thumbnail_cache.get(name, ''))
+            
+            # Use the simple image cache
+            img = get_item_image(name)
+            
             available = is_available_item(name, category_list)
             synergy = compute_synergy_tags(category_list, desc, stats_list)
             playstyles = compute_playstyles(category_list, synergy)

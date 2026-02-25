@@ -5,7 +5,7 @@ import os
 import time
 from html import escape
 
-from .utils import DATA_DIR, OUTPUT_DIR, load_synergy_graph, normalize_image_url
+from .utils import DATA_DIR, OUTPUT_DIR, load_synergy_graph
 from .scoring import score_pool, score_breakdown
 
 CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
@@ -36,9 +36,7 @@ def load_items(path=ITEMS_CSV):
             avail = r.get('Available', 'true').strip().lower()
             if avail not in ('', 'true', '1', 'yes'):
                 continue
-            # parse new metadata columns into Python structures
-            from .utils import normalize_image_url
-            r['Image'] = normalize_image_url(r.get('Image', '') or '')
+            # Images are already correct in the cache - no need to normalize
             # comma-separated lists may be empty strings
             r['SynergyTags'] = [t for t in r.get('SynergyTags', '').split(',') if t]
             r['Playstyles'] = [p for p in r.get('Playstyles', '').split(',') if p]
@@ -238,7 +236,7 @@ def generate_pool(config=None):
             tag_list = [t for t in tag_list if t not in display_blacklist]
             # wrap each tag/entry in backticks to highlight
             tags = ', '.join(f'`{t}`' for t in tag_list if t)
-            img = normalize_image_url(it.get('Image','') or '')
+            img = it.get('Image', '') or ''
             img_md = f'<img src="{img}" alt="{it["Name"]}" width="50"/>' if img else ''
             name_colored = color_text(it['Name'], it['Rarity'])
             rarity_colored = color_text(it['Rarity'], it['Rarity'])
@@ -305,7 +303,7 @@ def export_pool_files(pool, score=0):
             display_blacklist = {'damage', 'utility', 'healing'}
             tag_list = [t for t in tag_list if t not in display_blacklist]
             tags = ', '.join(f'`{t}`' for t in tag_list if t)
-            img = normalize_image_url(it.get('Image', '') or '')
+            img = it.get('Image', '') or ''
             img_md = f'<img src="{img}" alt="{it["Name"]}" width="50"/>' if img else ''
             name_colored = color_text(it['Name'], it['Rarity'])
             rarity_colored = color_text(it['Rarity'], it['Rarity'])
