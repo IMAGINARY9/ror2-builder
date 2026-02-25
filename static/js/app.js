@@ -118,6 +118,25 @@ function setupEventListeners() {
     document.querySelector('.close').addEventListener('click', () => {
         document.getElementById('itemModal').classList.remove('show');
     });
+
+    // Parameter change handlers: reset optimizer state and re-enable optimize button
+    const kOptInput = document.getElementById('kOpt');
+    const synergyInput = document.getElementById('synergyWeight');
+    const paramHandler = () => {
+        // Clear any running optimizer so nextIteration will reinitialize with new params
+        if (currentOptimizer) currentOptimizer = null;
+        const nextBtn = document.getElementById('nextIteration');
+        if (nextBtn) nextBtn.disabled = false;
+        showStatus('Parameters changed — optimizer reset', 'info');
+    };
+    if (kOptInput) {
+        kOptInput.addEventListener('change', paramHandler);
+        kOptInput.addEventListener('input', paramHandler);
+    }
+    if (synergyInput) {
+        synergyInput.addEventListener('change', paramHandler);
+        synergyInput.addEventListener('input', paramHandler);
+    }
 }
 
 // Setup Socket.IO for real-time updates
@@ -276,6 +295,9 @@ async function addItemToPool(itemName) {
             if (currentOptimizer) {
                 currentOptimizer = null;
             }
+            // Re-enable manual optimize button after user change
+            const nextBtn = document.getElementById('nextIteration');
+            if (nextBtn) nextBtn.disabled = false;
             
             // Update scores
             const oldScore = currentScore;
@@ -330,6 +352,9 @@ async function removeItemFromPool(itemName) {
             if (currentOptimizer) {
                 currentOptimizer = null;
             }
+            // Re-enable manual optimize button after user change
+            const nextBtn = document.getElementById('nextIteration');
+            if (nextBtn) nextBtn.disabled = false;
             
             // Update scores
             const oldScore = currentScore;
@@ -517,6 +542,9 @@ function resetOptimization() {
     iterationCount = 0;
     document.getElementById('iterationCount').textContent = '0';
     document.getElementById('historyTable').innerHTML = '';
+    // Ensure the manual optimize button is available after a reset
+    const nextBtn = document.getElementById('nextIteration');
+    if (nextBtn) nextBtn.disabled = false;
     showStatus('Optimization reset', 'info');
 }
 
