@@ -55,7 +55,9 @@ def export_items(output_csv=None):
             # Use the simple image cache
             img = get_item_image(name)
             
-            available = is_available_item(name, category_list)
+            # Mark items without images as unavailable (debug items, consumed items, etc.)
+            has_image = bool(img and img.strip())
+            available = has_image and is_available_item(name, category_list)
             synergy = compute_synergy_tags(category_list, desc, stats_list)
             playstyles = compute_playstyles(category_list, synergy)
             try:
