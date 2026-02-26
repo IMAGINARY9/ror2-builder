@@ -45,6 +45,18 @@ def set_pool(new_pool):
         current_pool = list(new_pool)
 
 
+def get_scoring_params(config):
+    """Extract scoring parameters from config dict."""
+    return {
+        'style': config.get('style'),
+        'synergy_weight': config.get('synergy_weight', 0),
+        'style_weight': config.get('style_weight', 8.0),
+        'diversity_weight': config.get('diversity_weight', 0.5),
+        'coverage_weight': config.get('coverage_weight', 0.3),
+        'pinned_items': config.get('pinned_items', [])
+    }
+
+
 def initialize_data():
     """Load items and synergy graph on startup."""
     global all_items, synergy_graph, current_config
@@ -113,11 +125,10 @@ def get_items():
 def get_pool():
     """Get current pool state."""
     pool = get_pool_copy()
+    params = get_scoring_params(current_config)
     return jsonify({
         'pool': pool,
-        'score': score_pool(pool, synergy_graph,
-                           current_config.get('style'),
-                           current_config.get('synergy_weight', 0))
+        'score': score_pool(pool, synergy_graph, **params)
     })
 
 
@@ -132,12 +143,9 @@ def update_pool():
         if item:
             new_pool.append(item)
     set_pool(new_pool)
-    score = score_pool(new_pool, synergy_graph,
-                      current_config.get('style'),
-                      current_config.get('synergy_weight', 0))
-    breakdown = score_breakdown(new_pool, synergy_graph,
-                                current_config.get('style'),
-                                current_config.get('synergy_weight', 0))
+    params = get_scoring_params(current_config)
+    score = score_pool(new_pool, synergy_graph, **params)
+    breakdown = score_breakdown(new_pool, synergy_graph, **params)
     return jsonify({
         'success': True,
         'pool': new_pool,
@@ -156,9 +164,8 @@ def add_item():
     if item and all(it['Name'] != name for it in pool):
         pool.append(item)
         set_pool(pool)
-    score = score_pool(pool, synergy_graph,
-                      current_config.get('style'),
-                      current_config.get('synergy_weight', 0))
+    params = get_scoring_params(current_config)
+    score = score_pool(pool, synergy_graph, **params)
     return jsonify({'success': bool(item), 'score': score, 'pool': pool})
 
 
@@ -171,9 +178,8 @@ def remove_item():
     
     current_pool = [it for it in current_pool if it['Name'] != item_name]
     
-    score = score_pool(current_pool, synergy_graph,
-                      current_config.get('style'),
-                      current_config.get('synergy_weight', 0))
+    params = get_scoring_params(current_config)
+    score = score_pool(current_pool, synergy_graph, **params)
     
     # include the new pool for client-side syncing
     return jsonify({'success': True, 'score': score, 'pool': current_pool})
@@ -187,9 +193,8 @@ def generate_random_pool():
     opt = LocalSearchOptimizer(all_items, config, random_seed=None)
     pool = opt._generate_initial_pool()
     set_pool(pool)
-    score = score_pool(pool, synergy_graph,
-                      config.get('style'),
-                      config.get('synergy_weight', 0))
+    params = get_scoring_params(config)
+    score = score_pool(pool, synergy_graph, **params)
     return jsonify({
         'success': True,
         'pool': pool,
@@ -212,6 +217,51 @@ def update_config():
     return jsonify({'success': True, 'config': current_config})
 
 
+@app.route('/api/pool/pin', methods=['POST'])
+def pin_item():
+    """Pin an item so it won't be removed during optimization."""
+    global current_config
+    data = request.json
+    item_name = data.get('item')
+    
+    if 'pinned_items' not in current_config:
+        current_config['pinned_items'] = []
+    
+    if item_name not in current_config['pinned_items']:
+        current_config['pinned_items'].append(item_name)
+    
+    return jsonify({'success': True, 'pinned_items': current_config['pinned_items']})
+
+
+@app.route('/api/pool/unpin', methods=['POST'])
+def unpin_item():
+    """Unpin an item so it can be optimized."""
+    global current_config
+    data = request.json
+    item_name = data.get('item')
+    
+    if 'pinned_items' not in current_config:
+        current_config['pinned_items'] = []
+    
+    if item_name in current_config['pinned_items']:
+        current_config['pinned_items'].remove(item_name)
+    
+    return jsonify({'success': True, 'pinned_items': current_config['pinned_items']})
+
+
+@app.route('/api/config/style', methods=['POST'])
+def update_style():
+    """Update the play style preference."""
+    global current_config
+    data = request.json
+    style = data.get('style')
+    
+    if style:
+        current_config['style'] = style
+    
+    return jsonify({'success': True, 'style': current_config.get('style')})
+
+
 @app.route('/api/pool/save', methods=['POST'])
 def save_pool():
     """Save current pool to CSV and MD files with timestamp."""
@@ -221,9 +271,8 @@ def save_pool():
         import shutil
         
         # Calculate score
-        score = score_pool(current_pool, synergy_graph, 
-                          current_config.get('style'),
-                          current_config.get('synergy_weight', 0))
+        params = get_scoring_params(current_config)
+        score = score_pool(current_pool, synergy_graph, **params)
         
         # Use original export function
         export_pool_files(current_pool, score)
@@ -309,9 +358,8 @@ def load_pool_from_file():
             if item:
                 current_pool.append(item)
         
-        score = score_pool(current_pool, synergy_graph,
-                          current_config.get('style'),
-                          current_config.get('synergy_weight', 0))
+        params = get_scoring_params(current_config)
+        score = score_pool(current_pool, synergy_graph, **params)
         
         return jsonify({
             'success': True,
@@ -357,12 +405,14 @@ def optimize_step():
         )
         optimizer.graph = synergy_graph
         optimizer.style = config.get('style')
-        optimizer.synergy_weight = synergy_weight
+        optimizer.synergy_weight = config.get('synergy_weight', 0.5)
+        optimizer.style_weight = config.get('style_weight', 5.0)
+        optimizer.diversity_weight = config.get('diversity_weight', 0.5)
+        optimizer.coverage_weight = config.get('coverage_weight', 0.3)
         
         # Get current score
-        current_score = score_pool(pool, synergy_graph,
-                                   config.get('style'),
-                                   synergy_weight)
+        params = get_scoring_params(config)
+        current_score = score_pool(pool, synergy_graph, **params)
         
         # Find best swap
         swaps = optimizer._generate_neighborhood(pool, k=k_opt)
@@ -377,9 +427,8 @@ def optimize_step():
         # Apply best swap
         best_swap = evaluated_swaps[0]
         new_pool = optimizer._apply_swap(pool, best_swap)
-        new_score = score_pool(new_pool, synergy_graph,
-                              config.get('style'),
-                              synergy_weight)
+        params = get_scoring_params(config)
+        new_score = score_pool(new_pool, synergy_graph, **params)
         
         # Update global current_pool
         global current_pool

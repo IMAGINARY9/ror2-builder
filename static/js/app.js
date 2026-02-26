@@ -12,6 +12,7 @@ let socket = null;
 let dragFromPool = false; // true while dragging a card originating from pool
 let optimizationRunning = false;
 let currentOptimizer = null; // reference to current optimization session
+let pinnedItems = new Set(); // Set of pinned item names
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -62,7 +63,21 @@ async function loadConfig() {
     
     // Update UI with config values
     document.getElementById('kOpt').value = config.optimization?.k_opt || 1;
-    document.getElementById('synergyWeight').value = config.synergy_weight || 0.5;
+    document.getElementById('synergyWeight').value = config.synergy_weight || 2.0;
+    document.getElementById('styleWeight').value = config.style_weight || 8.0;
+    document.getElementById('diversityWeight').value = config.diversity_weight || 0.5;
+    document.getElementById('coverageWeight').value = config.coverage_weight || 0.3;
+    document.getElementById('playStyle').value = config.style || '';
+    
+    // Update slider value displays
+    document.getElementById('kOptValue').textContent = config.optimization?.k_opt || 1;
+    document.getElementById('synergyWeightValue').textContent = (config.synergy_weight || 2.0).toFixed(1);
+    document.getElementById('styleWeightValue').textContent = (config.style_weight || 8.0).toFixed(1);
+    document.getElementById('diversityWeightValue').textContent = (config.diversity_weight || 0.5).toFixed(1);
+    document.getElementById('coverageWeightValue').textContent = (config.coverage_weight || 0.3).toFixed(1);
+    
+    // Load pinned items
+    pinnedItems = new Set(config.pinned_items || []);
 }
 
 // Setup event listeners
@@ -84,6 +99,32 @@ function setupEventListeners() {
     
     // Optimization controls  
     document.getElementById('nextIteration').addEventListener('click', nextIteration);
+    
+    // Configuration controls
+    document.getElementById('playStyle').addEventListener('change', async (e) => {
+        await updatePlayStyle(e.target.value);
+    });
+    
+    // Range slider value updates
+    const sliderConfigs = [
+        { id: 'kOpt', valueId: 'kOptValue', format: (v) => v },
+        { id: 'synergyWeight', valueId: 'synergyWeightValue', format: (v) => parseFloat(v).toFixed(1) },
+        { id: 'styleWeight', valueId: 'styleWeightValue', format: (v) => parseFloat(v).toFixed(1) },
+        { id: 'diversityWeight', valueId: 'diversityWeightValue', format: (v) => parseFloat(v).toFixed(1) },
+        { id: 'coverageWeight', valueId: 'coverageWeightValue', format: (v) => parseFloat(v).toFixed(1) }
+    ];
+    
+    sliderConfigs.forEach(config => {
+        const slider = document.getElementById(config.id);
+        const valueDisplay = document.getElementById(config.valueId);
+        
+        slider.addEventListener('input', (e) => {
+            valueDisplay.textContent = config.format(e.target.value);
+        });
+        
+        // Initialize display with current value
+        valueDisplay.textContent = config.format(slider.value);
+    });
     
     // Pool drop zone
     const dropZone = document.getElementById('poolDropZone');
@@ -201,7 +242,7 @@ function renderItems() {
 }
 
 // Create item card element
-function createItemCard(item) {
+function createItemCard(item, isInPool = false) {
     const card = document.createElement('div');
     card.className = 'item-card';
     card.draggable = true;
@@ -211,8 +252,13 @@ function createItemCard(item) {
     const rarity = (item.rarity || 'white').toString().toLowerCase();
     card.dataset.rarity = rarity;
     
-    if (item.in_pool) {
+    if (item.in_pool || isInPool) {
         card.classList.add('in-pool');
+    }
+    
+    // Check if item is pinned
+    if (pinnedItems.has(item.name)) {
+        card.classList.add('pinned');
     }
     
     // Item icon/name
@@ -229,10 +275,27 @@ function createItemCard(item) {
         card.appendChild(name);
     }
     
+    // Add pin indicator if pinned
+    if (pinnedItems.has(item.name)) {
+        const pinIndicator = document.createElement('div');
+        pinIndicator.className = 'pin-indicator';
+        pinIndicator.textContent = '📌';
+        pinIndicator.title = 'Pinned (won\'t be removed during optimization)';
+        card.appendChild(pinIndicator);
+    }
+    
     // Drag events
     card.addEventListener('dragstart', handleDragStart);
     card.addEventListener('dragend', handleDragEnd);
     card.addEventListener('click', () => showItemDetails(item));
+    
+    // Right-click to pin/unpin (only for items in pool)
+    if (isInPool) {
+        card.addEventListener('contextmenu', async (e) => {
+            e.preventDefault();
+            await togglePinItem(item.name);
+        });
+    }
     
     return card;
 }
@@ -348,6 +411,16 @@ async function removeItemFromPool(itemName) {
                 currentPool = currentPool.filter(it => it.Name !== itemName && it.name !== itemName);
             }
             
+            // Unpin item if it was pinned
+            if (pinnedItems.has(itemName)) {
+                pinnedItems.delete(itemName);
+                await fetch('/api/pool/unpin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item: itemName })
+                });
+            }
+            
             // Reset optimizer state when user manually edits pool
             if (currentOptimizer) {
                 currentOptimizer = null;
@@ -430,6 +503,70 @@ async function savePool() {
             showStatus(`Pool saved to ${data.csv_path}`, 'success');
         } else {
             showStatus('Error: ' + (data.error || 'Failed to save'), 'error');
+        }
+    } catch (error) {
+        showStatus('Error: ' + error.message, 'error');
+    }
+}
+
+
+async function togglePinItem(itemName) {
+    try {
+        const isPinned = pinnedItems.has(itemName);
+        const endpoint = isPinned ? '/api/pool/unpin' : '/api/pool/pin';
+        
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item: itemName })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update local state
+            if (isPinned) {
+                pinnedItems.delete(itemName);
+                showStatus(`Unpinned ${itemName}`, 'success');
+            } else {
+                pinnedItems.add(itemName);
+                showStatus(`Pinned ${itemName} (won't be removed during optimization)`, 'success');
+            }
+            
+            // Re-render pool to show pin indicator
+            renderPool();
+        }
+    } catch (error) {
+        showStatus('Error: ' + error.message, 'error');
+    }
+}
+
+
+async function updatePlayStyle(style) {
+    try {
+        const response = await fetch('/api/config/style', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ style: style })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showStatus(`Play style updated to: ${style || 'None'}`, 'success');
+            
+            // Reset optimizer state when style changes
+            if (currentOptimizer) {
+                currentOptimizer = null;
+            }
+            
+            // Re-enable manual optimize button
+            const nextBtn = document.getElementById('nextIteration');
+            if (nextBtn) nextBtn.disabled = false;
+            
+            // Recalculate score with new style
+            await loadPoolState();
+            updateUI();
         }
     } catch (error) {
         showStatus('Error: ' + error.message, 'error');
@@ -694,7 +831,7 @@ function renderPool() {
             in_pool: true
         };
         
-        const card = createItemCard(itemData);
+        const card = createItemCard(itemData, true); // Pass true for isInPool
         card.classList.remove('in-pool');
         
         // Enable dragging FROM pool to remove
@@ -809,9 +946,15 @@ async function getCurrentConfig() {
     
     return {
         ...baseConfig,
+        style: document.getElementById('playStyle').value || baseConfig.style || '',
+        synergy_weight: parseFloat(document.getElementById('synergyWeight').value) || 2.0,
+        style_weight: parseFloat(document.getElementById('styleWeight').value) || 8.0,
+        diversity_weight: parseFloat(document.getElementById('diversityWeight').value) || 0.5,
+        coverage_weight: parseFloat(document.getElementById('coverageWeight').value) || 0.3,
+        pinned_items: Array.from(pinnedItems),
         optimization: {
-            k_opt: parseInt(document.getElementById('kOpt').value)
-        },
-        synergy_weight: parseFloat(document.getElementById('synergyWeight').value)
+            ...(baseConfig.optimization || {}),
+            k_opt: parseInt(document.getElementById('kOpt').value) || 1
+        }
     };
 }

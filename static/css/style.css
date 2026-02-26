@@ -193,6 +193,20 @@ section {
     opacity: 0.4;
 }
 
+.item-card.pinned {
+    border: 3px solid var(--warning);
+    box-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+}
+
+.item-card.pinned .pin-indicator {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 16px;
+    pointer-events: none;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+}
+
 .item-card[data-rarity="white"] {
     border-color: var(--white);
 }
@@ -320,6 +334,75 @@ section {
     border-radius: var(--border-radius);
     color: var(--text-primary);
     font-size: 1em;
+}
+
+.control-group input[type="range"] {
+    padding: 0;
+    height: 6px;
+    background: var(--bg-dark);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb:hover {
+    background: #5a8fd8;
+}
+
+.control-group input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--accent);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.control-group input[type="range"]::-moz-range-thumb:hover {
+    background: #5a8fd8;
+}
+
+.slider-value {
+    font-weight: bold;
+    color: var(--accent);
+    min-width: 35px;
+    display: inline-block;
+    text-align: center;
+}
+
+.control-group select {
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--bg-dark);
+    border-radius: var(--border-radius);
+    color: var(--text-primary);
+    font-size: 1em;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.control-group select:hover {
+    border-color: var(--accent);
+}
+
+.control-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
 }
 
 .control-group .help-text {

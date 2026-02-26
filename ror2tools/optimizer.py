@@ -57,8 +57,9 @@ class LocalSearchOptimizer:
         max_iterations: int = 100,
         convergence_threshold: int = 10,
         use_simulated_annealing: bool = False,
-        temperature_initial: float = 1.0,
-        temperature_decay: float = 0.95,
+        temperature_initial: float = 10.0,
+        temperature_decay: float = 0.98,
+        temperature_min: float = 0.1,
         random_seed: Optional[int] = None
     ):
         """
@@ -71,8 +72,9 @@ class LocalSearchOptimizer:
             max_iterations: Maximum optimization iterations
             convergence_threshold: Stop if no improvement for this many iterations
             use_simulated_annealing: Accept worse solutions probabilistically
-            temperature_initial: Starting temperature for annealing
-            temperature_decay: Temperature multiplier per iteration
+            temperature_initial: Starting temperature for annealing (increased from 1.0)
+            temperature_decay: Temperature multiplier per iteration (slower from 0.95)
+            temperature_min: Minimum temperature floor (new parameter)
             random_seed: Random seed for reproducibility
         """
         self.items = items
@@ -83,10 +85,15 @@ class LocalSearchOptimizer:
         self.use_simulated_annealing = use_simulated_annealing
         self.temperature = temperature_initial
         self.temperature_decay = temperature_decay
+        self.temperature_min = temperature_min
         
         # Extract config parameters
         self.style = config.get('style')
         self.synergy_weight = config.get('synergy_weight', 0)
+        self.style_weight = config.get('style_weight', 5.0)
+        self.diversity_weight = config.get('diversity_weight', 0.5)
+        self.coverage_weight = config.get('coverage_weight', 0.3)
+        self.pinned_items = set(config.get('pinned_items', []))  # Items user wants to keep
         self.graph = None  # Will be loaded when needed
         
         if random_seed is not None:
@@ -126,7 +133,7 @@ class LocalSearchOptimizer:
         k: Optional[int] = None
     ) -> List[Swap]:
         """
-        Generate all k-opt swaps that respect rarity constraints.
+        Generate all k-opt swaps that respect rarity constraints and pinned items.
         
         Args:
             pool: Current pool
@@ -150,12 +157,16 @@ class LocalSearchOptimizer:
             pool_items = pool_by_rarity[rarity]
             available_items = available_by_rarity.get(rarity, [])
             
+            # Filter out pinned items from pool_items (we can't remove them)
+            unpinned_pool_items = [item for item in pool_items 
+                                   if item['Name'] not in self.pinned_items]
+            
             # Need at least k items in both sets
-            if len(pool_items) < k or len(available_items) < k:
+            if len(unpinned_pool_items) < k or len(available_items) < k:
                 continue
             
-            # Generate all k-combinations from pool
-            for items_to_remove in combinations(pool_items, k):
+            # Generate all k-combinations from unpinned pool items
+            for items_to_remove in combinations(unpinned_pool_items, k):
                 # Generate all k-combinations from available
                 for items_to_add in combinations(available_items, k):
                     swap = Swap(
@@ -189,7 +200,10 @@ class LocalSearchOptimizer:
                 items_to_add=swap.add,
                 graph=self.graph,
                 style=self.style,
-                synergy_weight=self.synergy_weight
+                synergy_weight=self.synergy_weight,
+                style_weight=self.style_weight,
+                diversity_weight=self.diversity_weight,
+                coverage_weight=self.coverage_weight
             )
         
         # Sort by delta descending (best improvements first)
@@ -231,7 +245,9 @@ class LocalSearchOptimizer:
         
         # Accept downgrades probabilistically
         import math
-        probability = math.exp(delta / temperature)
+        # Apply temperature floor to maintain some randomness
+        effective_temp = max(temperature, self.temperature_min)
+        probability = math.exp(delta / effective_temp)
         return random.random() < probability
     
     def _generate_initial_pool(self) -> List[Dict]:
@@ -287,7 +303,9 @@ class LocalSearchOptimizer:
         
         # Compute initial score
         current_score = score_pool(
-            pool, self.graph, self.style, self.synergy_weight
+            pool, self.graph, self.style, self.synergy_weight,
+            self.style_weight, self.diversity_weight, self.coverage_weight,
+            self.pinned_items
         )
         
         # Initialize state
