@@ -17,23 +17,23 @@ from ror2tools.history import OptimizationHistory, HistoryEntry
 def test_scoring_basic():
     """Test basic scoring function."""
     pool = [
-        {'Name': 'Item1', 'Playstyles': ['frenzy'], 'Rarity': 'Common'},
-        {'Name': 'Item2', 'Playstyles': ['cc'], 'Rarity': 'Uncommon'},
+        {'Name': 'Item1', 'Playstyles': ['frenzy'], 'Rarity': 'Common', 'Category': 'Damage'},
+        {'Name': 'Item2', 'Playstyles': ['cc'], 'Rarity': 'Uncommon', 'Category': 'Utility'},
     ]
     
-    # Style score only
-    score = score_pool(pool, style='frenzy')
+    # Style score only (explicit weights for predictable assertions)
+    score = score_pool(pool, style='frenzy', style_weight=1.0, diversity_weight=0, coverage_weight=0, balance_weight=0)
     assert score == 1.0, "Should count 1 item matching 'frenzy'"
     
-    score = score_pool(pool, style='cc')
+    score = score_pool(pool, style='cc', style_weight=1.0, diversity_weight=0, coverage_weight=0, balance_weight=0)
     assert score == 1.0, "Should count 1 item matching 'cc'"
 
 
 def test_scoring_with_graph():
     """Test scoring with synergy graph."""
     pool = [
-        {'Name': 'A', 'Playstyles': [], 'Rarity': 'Common'},
-        {'Name': 'B', 'Playstyles': [], 'Rarity': 'Common'},
+        {'Name': 'A', 'Playstyles': [], 'Rarity': 'Common', 'Category': 'Damage'},
+        {'Name': 'B', 'Playstyles': [], 'Rarity': 'Common', 'Category': 'Utility'},
     ]
     
     graph = {
@@ -41,33 +41,33 @@ def test_scoring_with_graph():
         'B': {'A': 2}
     }
     
-    score = score_pool(pool, graph=graph, synergy_weight=1.0)
+    score = score_pool(pool, graph=graph, synergy_weight=1.0, diversity_weight=0, coverage_weight=0, balance_weight=0)
     assert score == 4.0, "Should sum synergy edges (2+2)"
 
 
 def test_score_delta():
     """Test delta computation."""
     pool = [
-        {'Name': 'A', 'Playstyles': ['frenzy'], 'Rarity': 'Common'},
-        {'Name': 'B', 'Playstyles': [], 'Rarity': 'Common'},
+        {'Name': 'A', 'Playstyles': ['frenzy'], 'Rarity': 'Common', 'Category': 'Damage'},
+        {'Name': 'B', 'Playstyles': [], 'Rarity': 'Common', 'Category': 'Utility'},
     ]
     
-    item_to_remove = [{'Name': 'A', 'Playstyles': ['frenzy'], 'Rarity': 'Common'}]
-    item_to_add = [{'Name': 'C', 'Playstyles': ['cc'], 'Rarity': 'Common'}]
+    item_to_remove = [{'Name': 'A', 'Playstyles': ['frenzy'], 'Rarity': 'Common', 'Category': 'Damage'}]
+    item_to_add = [{'Name': 'C', 'Playstyles': ['cc'], 'Rarity': 'Common', 'Category': 'Healing'}]
     
-    # Style changes
-    delta = compute_score_delta(pool, item_to_remove, item_to_add, style='frenzy')
+    # Style changes (explicit weights for predictable assertions)
+    delta = compute_score_delta(pool, item_to_remove, item_to_add, style='frenzy', style_weight=1.0, diversity_weight=0, coverage_weight=0, balance_weight=0)
     assert delta == -1.0, "Removing frenzy item should decrease score by 1"
     
-    delta = compute_score_delta(pool, item_to_remove, item_to_add, style='cc')
+    delta = compute_score_delta(pool, item_to_remove, item_to_add, style='cc', style_weight=1.0, diversity_weight=0, coverage_weight=0, balance_weight=0)
     assert delta == 1.0, "Adding cc item should increase score by 1"
 
 
 def test_score_breakdown():
     """Test score breakdown function."""
     pool = [
-        {'Name': 'A', 'Playstyles': ['frenzy'], 'Rarity': 'Common'},
-        {'Name': 'B', 'Playstyles': ['frenzy'], 'Rarity': 'Common'},
+        {'Name': 'A', 'Playstyles': ['frenzy'], 'Rarity': 'Common', 'Category': 'Damage'},
+        {'Name': 'B', 'Playstyles': ['frenzy'], 'Rarity': 'Common', 'Category': 'Utility'},
     ]
     
     graph = {
@@ -75,7 +75,8 @@ def test_score_breakdown():
         'B': {'A': 1}
     }
     
-    breakdown = score_breakdown(pool, graph, 'frenzy', synergy_weight=2.0)
+    # Explicit weights for predictable assertions
+    breakdown = score_breakdown(pool, graph, 'frenzy', synergy_weight=2.0, style_weight=1.0, diversity_weight=0, coverage_weight=0, balance_weight=0)
     
     assert breakdown['style_score'] == 2.0
     assert breakdown['synergy_score'] == 2.0

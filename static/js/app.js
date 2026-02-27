@@ -63,18 +63,20 @@ async function loadConfig() {
     
     // Update UI with config values
     document.getElementById('kOpt').value = config.optimization?.k_opt || 1;
-    document.getElementById('synergyWeight').value = config.synergy_weight || 2.0;
+    document.getElementById('synergyWeight').value = config.synergy_weight || 0.5;
     document.getElementById('styleWeight').value = config.style_weight || 8.0;
-    document.getElementById('diversityWeight').value = config.diversity_weight || 0.5;
-    document.getElementById('coverageWeight').value = config.coverage_weight || 0.3;
+    document.getElementById('diversityWeight').value = config.diversity_weight || 1.0;
+    document.getElementById('coverageWeight').value = config.coverage_weight || 1.0;
+    document.getElementById('balanceWeight').value = config.balance_weight || 5.0;
     document.getElementById('playStyle').value = config.style || '';
     
     // Update slider value displays
     document.getElementById('kOptValue').textContent = config.optimization?.k_opt || 1;
-    document.getElementById('synergyWeightValue').textContent = (config.synergy_weight || 2.0).toFixed(1);
+    document.getElementById('synergyWeightValue').textContent = (config.synergy_weight || 0.5).toFixed(1);
     document.getElementById('styleWeightValue').textContent = (config.style_weight || 8.0).toFixed(1);
-    document.getElementById('diversityWeightValue').textContent = (config.diversity_weight || 0.5).toFixed(1);
-    document.getElementById('coverageWeightValue').textContent = (config.coverage_weight || 0.3).toFixed(1);
+    document.getElementById('diversityWeightValue').textContent = (config.diversity_weight || 1.0).toFixed(1);
+    document.getElementById('coverageWeightValue').textContent = (config.coverage_weight || 1.0).toFixed(1);
+    document.getElementById('balanceWeightValue').textContent = (config.balance_weight || 5.0).toFixed(1);
     
     // Load pinned items
     pinnedItems = new Set(config.pinned_items || []);
@@ -111,7 +113,8 @@ function setupEventListeners() {
         { id: 'synergyWeight', valueId: 'synergyWeightValue', format: (v) => parseFloat(v).toFixed(1) },
         { id: 'styleWeight', valueId: 'styleWeightValue', format: (v) => parseFloat(v).toFixed(1) },
         { id: 'diversityWeight', valueId: 'diversityWeightValue', format: (v) => parseFloat(v).toFixed(1) },
-        { id: 'coverageWeight', valueId: 'coverageWeightValue', format: (v) => parseFloat(v).toFixed(1) }
+        { id: 'coverageWeight', valueId: 'coverageWeightValue', format: (v) => parseFloat(v).toFixed(1) },
+        { id: 'balanceWeight', valueId: 'balanceWeightValue', format: (v) => parseFloat(v).toFixed(1) }
     ];
     
     sliderConfigs.forEach(config => {
@@ -947,10 +950,11 @@ async function getCurrentConfig() {
     return {
         ...baseConfig,
         style: document.getElementById('playStyle').value || baseConfig.style || '',
-        synergy_weight: parseFloat(document.getElementById('synergyWeight').value) || 2.0,
+        synergy_weight: parseFloat(document.getElementById('synergyWeight').value) || 0.5,
         style_weight: parseFloat(document.getElementById('styleWeight').value) || 8.0,
-        diversity_weight: parseFloat(document.getElementById('diversityWeight').value) || 0.5,
-        coverage_weight: parseFloat(document.getElementById('coverageWeight').value) || 0.3,
+        diversity_weight: parseFloat(document.getElementById('diversityWeight').value) || 1.0,
+        coverage_weight: parseFloat(document.getElementById('coverageWeight').value) || 1.0,
+        balance_weight: parseFloat(document.getElementById('balanceWeight').value) || 5.0,
         pinned_items: Array.from(pinnedItems),
         optimization: {
             ...(baseConfig.optimization || {}),

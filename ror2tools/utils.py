@@ -193,9 +193,64 @@ def load_synergy_graph(path=None):
         path = os.path.join(DATA_DIR, 'synergy.json')
     try:
         with open(path, encoding='utf-8') as f:
-            return json.load(f)
+            graph = json.load(f)
     except FileNotFoundError:
-        return {}
+        graph = {}
+    
+    # Boost internal synergies for playstyles with fewer items
+    # This ensures styles like CC compete with frenzy/mobile in optimization
+    PLAYSTYLE_BOOSTS = {
+        'cc': [
+            "Frost Relic", "Chronobauble", "Stun Grenade", "Breaching Fin",
+            "Sticky Bomb", "Tri-Tip Dagger", "Gasoline", "Ignition Tank",
+            "Electric Boomerang", "Royal Capacitor"
+        ],
+        'tank': [
+            'Aegis', "Ben's Raincoat", 'Repulsion Armor Plate', 'Tougher Times',
+            'Personal Shield Generator', 'Rose Buckler', 'Oddly-shaped Opal',
+            'Jade Elephant', 'Transcendence', 'Titanic Knurl', 'Planula',
+            'Safer Spaces', 'Rejuvenation Rack', 'Infusion', 'Kinetic Dampener',
+            'Topaz Brooch', 'Prison Matrix', 'Mired Urn'
+        ],
+        'summon': [
+            'Spare Drone Parts', 'Defense Nucleus', 'Empathy Cores',
+            "Queen's Gland", 'The Back-up', 'Squid Polyp', 'Ancestral Incubator',
+            'Newly Hatched Zoea', 'Goobo Jr.', 'Halcyon Seed', 'Happiest Mask',
+            'Gnarled Woodsprite', 'Elusive Antlers', 'Defiant Gouge'
+        ],
+        'regen': [
+            'Bustling Fungus', 'Cautious Slug', "Harvester's Scythe",
+            'Leeching Seed', 'Lepton Daisy', 'Medkit', 'Aegis',
+            'Rejuvenation Rack', 'Planula', 'Monster Tooth', 'Infusion',
+            'Titanic Knurl', 'Super Massive Leech', 'Gnarled Woodsprite',
+            'Corpsebloom', 'Weeping Fungus', 'Foreign Fruit', 'Power Elixir',
+            'Interstellar Desk Plant', "N'kuhana's Opinion"
+        ],
+        'proc': [
+            'AtG Missile Mk. 1', 'Ukulele', 'Tri-Tip Dagger', 'Sticky Bomb',
+            'Charged Perforator', 'Molten Perforator', 'Sentient Meat Hook',
+            'Shatterspleen', 'Needletick', 'Polylute', "Lens-Maker's Glasses",
+            "Harvester's Scythe", 'Predatory Instincts', 'Brittle Crown',
+            'Deus Ex Machina', 'Bottled Chaos', 'Runic Lens', 'Noxious Thorn',
+            'Symbiotic Scorpion', 'Chance Doll'
+        ]
+    }
+    BOOST_WEIGHT = 3
+    
+    for style, items_list in PLAYSTYLE_BOOSTS.items():
+        for i, item1 in enumerate(items_list):
+            if item1 not in graph:
+                graph[item1] = {}
+            for item2 in items_list[i+1:]:
+                if item2 not in graph:
+                    graph[item2] = {}
+                # Add bidirectional synergy if not already present or if weaker
+                if item2 not in graph[item1] or graph[item1][item2] < BOOST_WEIGHT:
+                    graph[item1][item2] = BOOST_WEIGHT
+                if item1 not in graph[item2] or graph[item2][item1] < BOOST_WEIGHT:
+                    graph[item2][item1] = BOOST_WEIGHT
+    
+    return graph
 
 
 

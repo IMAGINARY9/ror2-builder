@@ -89,10 +89,11 @@ class LocalSearchOptimizer:
         
         # Extract config parameters
         self.style = config.get('style')
-        self.synergy_weight = config.get('synergy_weight', 0)
-        self.style_weight = config.get('style_weight', 5.0)
-        self.diversity_weight = config.get('diversity_weight', 0.5)
-        self.coverage_weight = config.get('coverage_weight', 0.3)
+        self.synergy_weight = config.get('synergy_weight', 0.5)
+        self.style_weight = config.get('style_weight', 8.0)
+        self.diversity_weight = config.get('diversity_weight', 1.0)
+        self.coverage_weight = config.get('coverage_weight', 1.0)
+        self.balance_weight = config.get('balance_weight', 5.0)
         self.pinned_items = set(config.get('pinned_items', []))  # Items user wants to keep
         self.graph = None  # Will be loaded when needed
         
@@ -203,7 +204,11 @@ class LocalSearchOptimizer:
                 synergy_weight=self.synergy_weight,
                 style_weight=self.style_weight,
                 diversity_weight=self.diversity_weight,
-                coverage_weight=self.coverage_weight
+                coverage_weight=self.coverage_weight,
+                balance_weight=self.balance_weight,
+                pinned_items=self.pinned_items,
+                pin_bonus=2.0,
+                pin_synergy_bonus=1.5
             )
         
         # Sort by delta descending (best improvements first)
@@ -254,24 +259,83 @@ class LocalSearchOptimizer:
         """
         Generate initial random pool respecting rarity constraints.
         
+        IMPORTANT: Ensures category diversity by requiring at least one item
+        from each core category (Damage, Utility, Healing) to create playable pools.
+        
         Returns:
-            Random pool
+            Random pool with guaranteed category coverage
         """
-        pool = []
         items_by_rarity = self._partition_by_rarity(self.items)
         
+        # Core categories that MUST be represented
+        CORE_CATEGORIES = {'Damage', 'Utility', 'Healing'}
+        
         # Extract rarity counts from config
+        rarity_counts = {}
         for rarity, count in self.config.items():
             if not isinstance(count, int) or count <= 0:
                 continue
             if rarity in ('require_tags', 'require_playstyles', 'style',
                          'size', 'synergy_weight', 'optimization'):
                 continue
-            
-            candidates = items_by_rarity.get(rarity, [])
+            rarity_counts[rarity] = count
+        
+        # Helper to get item's primary category
+        def get_category(item):
+            cats = item.get('Category', '')
+            if isinstance(cats, str):
+                for core in CORE_CATEGORIES:
+                    if core in cats:
+                        return core
+            return None
+        
+        # Partition items by rarity AND category
+        items_by_rarity_cat = {}
+        for rarity, items in items_by_rarity.items():
+            items_by_rarity_cat[rarity] = {}
+            for cat in CORE_CATEGORIES:
+                items_by_rarity_cat[rarity][cat] = [
+                    it for it in items if get_category(it) == cat
+                ]
+        
+        pool = []
+        used_names = set()
+        categories_filled = {cat: False for cat in CORE_CATEGORIES}
+        
+        # First pass: ensure at least one item from each category
+        # Pick from most common rarity first
+        primary_rarity = 'Common'
+        for cat in CORE_CATEGORIES:
+            candidates = items_by_rarity_cat.get(primary_rarity, {}).get(cat, [])
+            if not candidates:
+                # Try any rarity
+                for rarity in items_by_rarity_cat:
+                    candidates = items_by_rarity_cat[rarity].get(cat, [])
+                    if candidates:
+                        break
             if candidates:
-                sample_size = min(count, len(candidates))
-                pool.extend(random.sample(candidates, sample_size))
+                item = random.choice(candidates)
+                pool.append(item)
+                used_names.add(item['Name'])
+                categories_filled[cat] = True
+        
+        # Second pass: fill remaining slots by rarity
+        for rarity, count in rarity_counts.items():
+            candidates = [it for it in items_by_rarity.get(rarity, []) 
+                         if it['Name'] not in used_names]
+            
+            # Count how many of this rarity already in pool
+            already_have = sum(1 for it in pool if it.get('Rarity') == rarity)
+            need = max(0, count - already_have)
+            
+            if candidates and need > 0:
+                sample_size = min(need, len(candidates))
+                selected = random.sample(candidates, sample_size)
+                for item in selected:
+                    pool.append(item)
+                    used_names.add(item['Name'])
+        
+        return pool
         
         return pool
     

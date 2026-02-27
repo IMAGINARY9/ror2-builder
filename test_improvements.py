@@ -34,7 +34,7 @@ def test_scoring_improvements():
     # Test with different parameter combinations
     configs = [
         {"synergy_weight": 0, "style_weight": 0, "diversity_weight": 0, "coverage_weight": 0},
-        {"synergy_weight": 2.0, "style_weight": 5.0, "diversity_weight": 0.5, "coverage_weight": 0.3},
+        {"synergy_weight": 2.0, "style_weight": 8.0, "diversity_weight": 1.0, "coverage_weight": 1.0},
         {"synergy_weight": 5.0, "style_weight": 0, "diversity_weight": 0, "coverage_weight": 0},
         {"synergy_weight": 0, "style_weight": 10.0, "diversity_weight": 0, "coverage_weight": 0},
     ]
