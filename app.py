@@ -11,7 +11,7 @@ import json
 import threading
 
 from ror2tools.generator import load_items, load_config, clean_wiki_markup
-from ror2tools.optimizer import LocalSearchOptimizer
+from ror2tools.optimizer import LocalSearchOptimizer, TabuList
 from ror2tools.scoring import score_pool, score_breakdown
 from ror2tools.history import OptimizationHistory
 from ror2tools.utils import load_synergy_graph
@@ -41,6 +41,10 @@ optimization_thread = None
 history = OptimizationHistory()
 all_items = []
 synergy_graph = {}
+
+# Per-session tabu list for the step-by-step /api/optimize/step endpoint.
+# Cleared whenever a new pool is generated so the optimizer starts fresh.
+step_tabu = TabuList()
 
 
 def get_pool_copy():
@@ -272,11 +276,14 @@ def remove_item():
 @app.route('/api/pool/random', methods=['POST'])
 def generate_random_pool():
     """Generate a random pool based on config."""
+    global step_tabu
     data = request.json
     config = data.get('config', current_config)
     opt = LocalSearchOptimizer(all_items, config, random_seed=None)
     pool = opt._generate_initial_pool()
     set_pool(pool)
+    # Clear step tabu list — new pool means a fresh optimisation session
+    step_tabu = TabuList()
     params = get_scoring_params(config)
     score = score_pool(pool, synergy_graph, **params)
     return jsonify({
@@ -512,12 +519,32 @@ def optimize_step():
         
         evaluated_swaps = optimizer._evaluate_swaps(pool, swaps)
         
-        if not evaluated_swaps or evaluated_swaps[0].delta <= 0:
-            return jsonify({'improved': False, 'message': 'No improvements found'})
+        # ---- Tabu-aware selection for step-by-step mode ----
+        # Record the current pool so we never cycle back to it.
+        step_tabu.record(pool)
+        current_fp = TabuList.pool_fingerprint(pool)
+        params = get_scoring_params(config)
+        current_score = score_pool(pool, synergy_graph, **params)
+        
+        best_swap = None
+        for swap in evaluated_swaps:
+            if swap.delta <= 0:
+                break  # no improving swap left
+            result_fp = TabuList.swap_result_fingerprint(current_fp, swap)
+            # Aspiration: allow tabu if it beats global best (use current best)
+            is_aspiration = (current_score + swap.delta) > current_score  # always true for delta > 0
+            if step_tabu.is_tabu(result_fp) and not is_aspiration:
+                continue
+            best_swap = swap
+            break
+        
+        if best_swap is None or best_swap.delta <= 0:
+            return jsonify({'improved': False, 'message': 'No improvements found (tabu filter active)'})
         
         # Apply best swap
-        best_swap = evaluated_swaps[0]
         new_pool = optimizer._apply_swap(pool, best_swap)
+        # Record the new state as tabu too
+        step_tabu.record(new_pool)
         params = get_scoring_params(config)
         new_score = score_pool(new_pool, synergy_graph, **params)
         
@@ -552,12 +579,14 @@ def handle_start_optimization(data):
         k_opt = config.get('optimization', {}).get('k_opt', 1)
         max_iterations = config.get('optimization', {}).get('max_iterations', 50)
         convergence = config.get('optimization', {}).get('convergence_threshold', 10)
+        tabu_tenure_val = config.get('optimization', {}).get('tabu_tenure', None)
         
         optimizer = LocalSearchOptimizer(
             all_items, config,
             k_opt=k_opt,
             max_iterations=max_iterations,
-            convergence_threshold=convergence
+            convergence_threshold=convergence,
+            tabu_tenure=tabu_tenure_val,
         )
         
         history = OptimizationHistory()

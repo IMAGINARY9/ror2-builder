@@ -15,6 +15,7 @@
 - Rarity constraint preservation (all swaps maintain exact rarity counts)
 - Convergence detection, simulated annealing, fast delta computation
 - Random restart / perturbed pools to escape local optima
+- **Tabu list** (`TabuList` class) — tracks visited pool states as frozen name-sets to prevent cycling; configurable tenure (`null` = infinite memory); aspiration criterion overrides tabu when a swap beats the global best
 
 ### Scoring System (`scoring.py`)
 
@@ -55,9 +56,11 @@
 
 ## Test Coverage
 
-10 unit tests in `tests/test_optimization.py` covering:
+10 original unit tests + 10 new tabu list tests in `tests/test_optimization.py` covering:
 - Scoring (basic, with synergy graph, delta, breakdown)
 - Optimizer (init, rarity partitioning, pool generation, swap generation)
+- TabuList (record, is_tabu, finite/infinite tenure, clear, fingerprinting)
+- Tabu integration (no-revisit with SA, aspiration criterion)
 - History (tracking, summary)
 
 All tests passing. Run with `pytest` from the project root.

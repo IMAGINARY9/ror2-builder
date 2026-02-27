@@ -77,6 +77,7 @@ The `optimize` command implements **iterative local search** to find better item
 - **Greedy best-first**: Selects the best improvement at each iteration
 - **Convergence detection**: Stops when no improvements found for N iterations
 - **Simulated annealing**: Optional probabilistic acceptance of worse solutions to escape local optima
+- **Tabu list**: Tracks visited pool states to prevent cycling (especially important with low synergy weights)
 - **Interactive mode**: Pause after each iteration to observe progress and manually intervene
 - **Manual editing**: In interactive mode, manually swap items between iterations
 - **History tracking**: Records all changes and exports detailed JSON logs
@@ -156,6 +157,7 @@ The pool generator and optimizer read `data/config.json` and support the followi
   - `use_simulated_annealing` – accept worse solutions probabilistically (default: false)
   - `temperature_initial` – starting temperature for annealing (default: 1.0)
   - `temperature_decay` – temperature multiplier per iteration (default: 0.95)
+  - `tabu_tenure` – iterations a visited pool state stays tabu (`null` = infinite memory, strongest anti-cycling; positive int = sliding window). Prevents the optimizer from cycling back to previously seen pools. (default: null)
 
 The generator automatically falls back to a **simple rarity-based pool** if
 only the rarity counts are provided (or when using `main.py generate`). No

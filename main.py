@@ -73,6 +73,7 @@ def main():
             use_simulated_annealing=opt_config.get('use_simulated_annealing', False),
             temperature_initial=opt_config.get('temperature_initial', 1.0),
             temperature_decay=opt_config.get('temperature_decay', 0.95),
+            tabu_tenure=opt_config.get('tabu_tenure', None),
             random_seed=args.seed
         )
         

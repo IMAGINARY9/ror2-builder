@@ -2,12 +2,13 @@
 Local search optimizer for Risk of Rain 2 item pools.
 
 This module implements iterative optimization algorithms that improve
-item pools while respecting rarity constraints.
+item pools while respecting rarity constraints.  Includes a tabu list
+to prevent cycling back to recently visited pool states.
 """
 
 import random
 import copy
-from typing import List, Dict, Tuple, Optional, Set
+from typing import List, Dict, Tuple, Optional, Set, FrozenSet
 from dataclasses import dataclass, field
 from itertools import combinations
 
@@ -38,6 +39,81 @@ class OptimizationState:
     best_pool: List[Dict]
     best_score: float
     last_swap: Optional[Swap] = None
+    tabu_skipped: int = 0  # Swaps skipped due to tabu this iteration
+
+
+class TabuList:
+    """
+    Tracks visited pool states to prevent the optimizer from cycling.
+
+    Each pool state is represented as a *frozenset* of item names.
+    A state is considered tabu (forbidden) if it was visited within the
+    last ``tenure`` iterations.  When ``tenure`` is ``None`` the memory
+    is infinite – every state visited during the run is remembered.
+
+    An **aspiration criterion** can override the tabu status: if
+    accepting a tabu move would produce a new global-best score the
+    move is allowed regardless.
+
+    Args:
+        tenure: Number of iterations a state stays tabu.
+                ``None`` (default) means infinite memory.
+    """
+
+    def __init__(self, tenure: Optional[int] = None) -> None:
+        self.tenure = tenure
+        # Maps pool fingerprint → iteration when the state was last visited
+        self._visited: Dict[FrozenSet[str], int] = {}
+
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def pool_fingerprint(pool: List[Dict]) -> FrozenSet[str]:
+        """Create a hashable fingerprint of a pool (frozenset of names)."""
+        return frozenset(item['Name'] for item in pool)
+
+    @staticmethod
+    def swap_result_fingerprint(
+        current_fp: FrozenSet[str],
+        swap: 'Swap',
+    ) -> FrozenSet[str]:
+        """Compute the fingerprint that would result from applying *swap*."""
+        remove_names = frozenset(item['Name'] for item in swap.remove)
+        add_names = frozenset(item['Name'] for item in swap.add)
+        return (current_fp - remove_names) | add_names
+
+    # ------------------------------------------------------------------
+    # Core API
+    # ------------------------------------------------------------------
+
+    def record(self, pool: List[Dict], iteration: int = 0) -> None:
+        """Mark a pool state as visited at *iteration*."""
+        fp = self.pool_fingerprint(pool)
+        self._visited[fp] = iteration
+
+    def record_fingerprint(self, fp: FrozenSet[str], iteration: int = 0) -> None:
+        """Mark an already-computed fingerprint as visited."""
+        self._visited[fp] = iteration
+
+    def is_tabu(self, fingerprint: FrozenSet[str], current_iteration: int = 0) -> bool:
+        """Return True if *fingerprint* is currently tabu."""
+        if fingerprint not in self._visited:
+            return False
+        if self.tenure is None:
+            return True  # infinite memory – always tabu once visited
+        visited_at = self._visited[fingerprint]
+        return (current_iteration - visited_at) <= self.tenure
+
+    def clear(self) -> None:
+        """Remove all recorded states."""
+        self._visited.clear()
+
+    @property
+    def size(self) -> int:
+        """Number of currently tracked states."""
+        return len(self._visited)
 
 
 class LocalSearchOptimizer:
@@ -60,6 +136,7 @@ class LocalSearchOptimizer:
         temperature_initial: float = 10.0,
         temperature_decay: float = 0.98,
         temperature_min: float = 0.1,
+        tabu_tenure: Optional[int] = None,
         random_seed: Optional[int] = None
     ):
         """
@@ -75,6 +152,9 @@ class LocalSearchOptimizer:
             temperature_initial: Starting temperature for annealing (increased from 1.0)
             temperature_decay: Temperature multiplier per iteration (slower from 0.95)
             temperature_min: Minimum temperature floor (new parameter)
+            tabu_tenure: Iterations a visited pool state stays tabu.
+                         ``None`` = infinite memory (default, strongest anti-cycling).
+                         Set to a positive int for a sliding window.
             random_seed: Random seed for reproducibility
         """
         self.items = items
@@ -86,6 +166,9 @@ class LocalSearchOptimizer:
         self.temperature = temperature_initial
         self.temperature_decay = temperature_decay
         self.temperature_min = temperature_min
+        
+        # Tabu list (prevents cycling back to recently visited pool states)
+        self.tabu = TabuList(tenure=tabu_tenure)
         
         # Extract config parameters
         self.style = config.get('style')
@@ -336,8 +419,6 @@ class LocalSearchOptimizer:
                     used_names.add(item['Name'])
         
         return pool
-        
-        return pool
     
     def optimize(
         self,
@@ -382,9 +463,13 @@ class LocalSearchOptimizer:
             best_score=current_score
         )
         
+        # Record initial pool in tabu list so we never cycle back to it
+        self.tabu.record(pool, iteration=0)
+        
         # Optimization loop
         for iteration in range(self.max_iterations):
             state.iteration = iteration
+            state.tabu_skipped = 0
             
             # Generate neighborhood
             neighborhood = self._generate_neighborhood(state.pool)
@@ -393,18 +478,42 @@ class LocalSearchOptimizer:
             if not neighborhood:
                 break
             
-            # Evaluate all swaps
+            # Evaluate all swaps (sorted best-first)
             evaluated_swaps = self._evaluate_swaps(state.pool, neighborhood)
             
-            # Select best swap
-            best_swap = evaluated_swaps[0] if evaluated_swaps else None
+            # ----------------------------------------------------------
+            # Tabu-aware swap selection
+            # ----------------------------------------------------------
+            current_fp = TabuList.pool_fingerprint(state.pool)
+            selected_swap: Optional[Swap] = None
             
-            # Decide whether to accept
-            if best_swap and self._should_accept(best_swap.delta, self.temperature):
-                # Apply swap
-                state.pool = self._apply_swap(state.pool, best_swap)
-                state.score += best_swap.delta
-                state.last_swap = best_swap
+            for swap in evaluated_swaps:
+                result_fp = TabuList.swap_result_fingerprint(current_fp, swap)
+                
+                # Aspiration criterion: override tabu if this swap would
+                # produce a new global best score.
+                is_aspiration = (state.score + swap.delta) > state.best_score
+                
+                if self.tabu.is_tabu(result_fp, iteration) and not is_aspiration:
+                    state.tabu_skipped += 1
+                    continue  # skip tabu move
+                
+                # First non-tabu (or aspiration-eligible) swap —
+                # check acceptance criterion (greedy / SA).
+                if self._should_accept(swap.delta, self.temperature):
+                    selected_swap = swap
+                break  # only test acceptance for the best non-tabu swap
+            
+            # ----------------------------------------------------------
+            # Apply or reject
+            # ----------------------------------------------------------
+            if selected_swap is not None:
+                state.pool = self._apply_swap(state.pool, selected_swap)
+                state.score += selected_swap.delta
+                state.last_swap = selected_swap
+                
+                # Record new pool state in tabu list
+                self.tabu.record(state.pool, iteration)
                 
                 # Update best if improved
                 if state.score > state.best_score:
@@ -414,7 +523,7 @@ class LocalSearchOptimizer:
                 else:
                     state.stale_iterations += 1
             else:
-                # No improvement
+                # Nothing accepted this iteration
                 state.stale_iterations += 1
                 state.last_swap = None
             

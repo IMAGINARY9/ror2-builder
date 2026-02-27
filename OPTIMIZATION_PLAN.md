@@ -122,15 +122,36 @@ class HistoryEntry:
 - Parallel neighborhood evaluation (multiprocessing)
 - Swap memoization / caching
 - Adaptive k-opt (start k=1, increase when stuck)
-- Tabu list to prevent cycling
 
 ---
 
-## 4. Future Algorithm Enhancements
+## 5. Tabu List (Implemented)
+
+The optimizer tracks every visited pool state (as a `frozenset` of item names).
+Before accepting a swap the resulting fingerprint is checked against the tabu
+list.  If the state was visited within the last `tabu_tenure` iterations (or
+ever, when `tabu_tenure` is `null` / infinite) the swap is **rejected** — unless
+the **aspiration criterion** is met (the swap would produce a new global-best
+score).
+
+### Why pool-fingerprint tracking?
+
+- Directly prevents **all** forms of cycling (2-step ping-pong, longer loops)
+- O(n) per fingerprint computation; O(1) lookup in a hash set
+- Memory is bounded by the number of iterations (tiny for typical runs)
+
+### Configuration
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `tabu_tenure` | `int \| null` | `null` | Iterations a state stays tabu. `null` = infinite memory (strongest). |
+
+---
+
+## 6. Future Algorithm Enhancements
 
 These enhancements are out of scope for the current implementation but are viable extensions:
 
-- **Tabu list**: Prevent cycling back to recently visited solutions
 - **Adaptive k-opt**: Start with k=1, increase when stuck
 - **Parallel evaluation**: Multiprocessing for large neighborhoods
 - **Genetic algorithms**: Population-based search with crossover and mutation
