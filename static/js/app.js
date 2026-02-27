@@ -1018,15 +1018,42 @@ function showStatus(message, type = 'info') {
 function showItemDetails(item) {
     const modal = document.getElementById('itemModal');
     const body = document.getElementById('modalBody');
-    
+
+    // Use pre-cleaned description from server, fall back to raw desc
+    const desc = item.clean_desc || item.desc || 'No description available';
+    const stats = item.stats || '';
+    const category = item.category || 'Unknown';
+    const dlc = item.dlc || 'Base';
+
+    // Rarity colour mapping
+    const rarityColors = {
+        white: '#FFFFFF', green: '#50C878', red: '#FF4500',
+        yellow: '#FFD700', blue: '#6699FF', purple: '#800080',
+        orange: '#FFA500'
+    };
+    const rarityColor = rarityColors[(item.rarity || 'white').toLowerCase()] || '#e0e0e0';
+    const rarityLabel = item.csv_rarity || item.rarity || 'Unknown';
+
+    const imgHtml = item.image
+        ? `<img src="${item.image}" alt="${item.name}" style="width:64px;height:64px;margin-right:12px;vertical-align:middle;">`
+        : '';
+
     body.innerHTML = `
-        <h2>${item.name}</h2>
-        <p><strong>Rarity:</strong> ${item.rarity}</p>
-        <p><strong>Description:</strong> ${item.desc || 'No description available'}</p>
-        <p><strong>Tags:</strong> ${item.tags.join(', ') || 'None'}</p>
-        <p><strong>Playstyles:</strong> ${item.playstyles.join(', ') || 'None'}</p>
+        <div style="display:flex;align-items:center;margin-bottom:12px">
+            ${imgHtml}
+            <div>
+                <h2 style="margin:0;color:${rarityColor}">${item.name}</h2>
+                <span style="color:${rarityColor};font-size:0.9em">${rarityLabel}</span>
+                ${dlc !== 'Base' ? `<span style="margin-left:8px;font-size:0.8em;color:#888">[${dlc}]</span>` : ''}
+            </div>
+        </div>
+        <p style="color:#ccc;line-height:1.5">${desc}</p>
+        ${stats ? `<p><strong>Stats:</strong> ${stats}</p>` : ''}
+        <p><strong>Category:</strong> ${category}</p>
+        <p><strong>Tags:</strong> ${(item.tags || []).join(', ') || 'None'}</p>
+        <p><strong>Playstyles:</strong> ${(item.playstyles || []).join(', ') || 'None'}</p>
     `;
-    
+
     modal.classList.add('show');
 }
 

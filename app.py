@@ -10,7 +10,7 @@ import os
 import json
 import threading
 
-from ror2tools.generator import load_items, load_config
+from ror2tools.generator import load_items, load_config, clean_wiki_markup
 from ror2tools.optimizer import LocalSearchOptimizer
 from ror2tools.scoring import score_pool, score_breakdown
 from ror2tools.history import OptimizationHistory
@@ -136,7 +136,9 @@ def get_items():
             'tags': item.get('SynergyTags', []) or [],
             'playstyles': item.get('Playstyles', []) or [],
             'category': item.get('Category', ''),
+            'stats': item.get('Stats', ''),
             'desc': item.get('Desc', ''),
+            'clean_desc': clean_wiki_markup(item.get('Desc', '')),
             'dlc': item.get('DLC', 'Base'),
             'in_pool': item.get('Name', '') in pool_names
         })
@@ -356,8 +358,14 @@ def save_pool():
         params = get_scoring_params(current_config)
         score = score_pool(current_pool, synergy_graph, **params)
         
-        # Use original export function
-        export_pool_files(current_pool, score)
+        # Use enriched export function with config, synergy graph, and DLCs
+        export_pool_files(
+            current_pool,
+            score=score,
+            config=current_config,
+            synergy_graph=synergy_graph,
+            enabled_dlcs=enabled_dlcs,
+        )
         
         # Create timestamped copies
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

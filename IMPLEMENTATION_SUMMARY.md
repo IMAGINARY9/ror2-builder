@@ -39,6 +39,12 @@
 - Flask + Flask-SocketIO real-time drag-and-drop UI
 - REST API for pool manipulation and configuration
 - WebSocket-powered background optimization with live progress
+- Rich saved reports with configuration parameters, score breakdown, pool statistics, and clean item descriptions
+
+### Item Description Cleanup (`generator.py`)
+
+- `clean_wiki_markup()` — strips RoR2 Fandom wiki template syntax (`{{Color|…}}`, `{{Stack|…}}`) from item descriptions
+- Applied in both the Markdown export (reports) and the web API (`/api/items` returns `clean_desc`)
 
 ### CLI Integration (`main.py`)
 
