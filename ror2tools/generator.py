@@ -19,7 +19,17 @@ def load_config(path=CONFIG_PATH):
         return json.load(f)
 
 
-def load_items(path=ITEMS_CSV):
+def load_items(path=ITEMS_CSV, enabled_dlcs=None):
+    """Load items from CSV, optionally filtering by enabled DLCs.
+    
+    Args:
+        path: Path to items CSV file
+        enabled_dlcs: Set of enabled DLC names (e.g., {'Base', 'SOTV', 'SOTS', 'AC'})
+                     If None, all DLCs are enabled
+    
+    Returns:
+        List of item dictionaries
+    """
     items = []
     seen = set()  # track names we've already loaded to avoid duplicates
     with open(path, encoding='utf-8') as f:
@@ -36,6 +46,14 @@ def load_items(path=ITEMS_CSV):
             avail = r.get('Available', 'true').strip().lower()
             if avail not in ('', 'true', '1', 'yes'):
                 continue
+            
+            # Filter by DLC if specified
+            item_dlc = r.get('DLC', 'Base')
+            if item_dlc == 'Hidden':
+                continue  # Always skip hidden/system items
+            if enabled_dlcs is not None and item_dlc not in enabled_dlcs:
+                continue
+            
             # Images are already correct in the cache - no need to normalize
             # comma-separated lists may be empty strings
             r['SynergyTags'] = [t for t in r.get('SynergyTags', '').split(',') if t]

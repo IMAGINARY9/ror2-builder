@@ -242,6 +242,57 @@ section {
     line-height: 1.2;
 }
 
+/* DLC Toggles */
+.dlc-toggles {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.dlc-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9em;
+    opacity: 0.5;
+}
+
+.dlc-btn:hover {
+    background: var(--bg-dark);
+    opacity: 0.8;
+}
+
+.dlc-btn.enabled {
+    opacity: 1;
+    border-color: var(--dlc-color, var(--accent));
+    background: rgba(var(--dlc-rgb, 74, 158, 255), 0.2);
+    color: var(--text-primary);
+}
+
+.dlc-btn.enabled:hover {
+    background: rgba(var(--dlc-rgb, 74, 158, 255), 0.3);
+}
+
+.dlc-btn .dlc-icon {
+    font-size: 1.2em;
+}
+
+.dlc-btn .dlc-name {
+    font-weight: 500;
+}
+
+.dlc-btn.disabled-permanent {
+    cursor: not-allowed;
+}
+
 /* Filters */
 .filters {
     display: flex;

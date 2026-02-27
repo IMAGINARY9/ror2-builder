@@ -13,6 +13,7 @@ let dragFromPool = false; // true while dragging a card originating from pool
 let optimizationRunning = false;
 let currentOptimizer = null; // reference to current optimization session
 let pinnedItems = new Set(); // Set of pinned item names
+let dlcStatus = []; // Array of DLC status objects
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -26,16 +27,102 @@ async function initializeApp() {
     showStatus('Loading items...', 'info');
     
     try {
+        await loadDLCStatus();
         await loadItems();
         await loadPoolState();
         await loadConfig();
         
+        renderDLCToggles();
         renderItems();
         updateUI();
         
         showStatus('Ready to build!', 'success');
     } catch (error) {
         showStatus('Error loading data: ' + error.message, 'error');
+        console.error(error);
+    }
+}
+
+// Load DLC status
+async function loadDLCStatus() {
+    const response = await fetch('/api/dlc');
+    const data = await response.json();
+    dlcStatus = data.dlcs;
+}
+
+// Render DLC toggle buttons
+function renderDLCToggles() {
+    const container = document.getElementById('dlcToggles');
+    container.innerHTML = '';
+    
+    dlcStatus.forEach(dlc => {
+        const btn = document.createElement('button');
+        btn.className = `dlc-btn ${dlc.enabled ? 'enabled' : ''} ${dlc.id === 'Base' ? 'disabled-permanent' : ''}`;
+        btn.dataset.dlc = dlc.id;
+        btn.style.setProperty('--dlc-color', dlc.color);
+        // Convert hex color to RGB for rgba() usage
+        const hex = dlc.color.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16) || 74;
+        const g = parseInt(hex.substr(2, 2), 16) || 158;
+        const b = parseInt(hex.substr(4, 2), 16) || 255;
+        btn.style.setProperty('--dlc-rgb', `${r}, ${g}, ${b}`);
+        
+        btn.innerHTML = `
+            <span class="dlc-icon">${dlc.icon}</span>
+            <span class="dlc-name">${dlc.id}</span>
+        `;
+        btn.title = `${dlc.name} - Click to ${dlc.enabled ? 'disable' : 'enable'}`;
+        
+        if (dlc.id !== 'Base') {
+            btn.addEventListener('click', () => toggleDLC(dlc.id, !dlc.enabled));
+        }
+        
+        container.appendChild(btn);
+    });
+}
+
+// Toggle DLC enabled/disabled
+async function toggleDLC(dlcId, enable) {
+    showStatus(`${enable ? 'Enabling' : 'Disabling'} ${dlcId}...`, 'info');
+    
+    try {
+        const response = await fetch('/api/dlc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dlc: dlcId, enabled: enable })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showStatus('Error: ' + data.error, 'error');
+            return;
+        }
+        
+        // Update local DLC status
+        dlcStatus = dlcStatus.map(dlc => ({
+            ...dlc,
+            enabled: data.enabled_dlcs.includes(dlc.id)
+        }));
+        
+        // Reload items with new DLC filter
+        await loadItems();
+        await loadPoolState();
+        
+        // Re-render everything
+        renderDLCToggles();
+        renderItems();
+        renderPool();
+        updateUI();
+        
+        // Notify about removed items
+        if (data.removed_from_pool && data.removed_from_pool.length > 0) {
+            showStatus(`${dlcId} ${enable ? 'enabled' : 'disabled'}. Removed from pool: ${data.removed_from_pool.join(', ')}`, 'warning');
+        } else {
+            showStatus(`${dlcId} ${enable ? 'enabled' : 'disabled'}. ${data.items_count} items available.`, 'success');
+        }
+    } catch (error) {
+        showStatus('Error toggling DLC: ' + error.message, 'error');
         console.error(error);
     }
 }

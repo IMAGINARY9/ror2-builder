@@ -21,12 +21,21 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ror2-optimization-secret'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# Available DLCs with metadata
+AVAILABLE_DLCS = {
+    'Base': {'name': 'Base Game', 'icon': '🎮', 'color': '#4a9'},
+    'SOTV': {'name': 'Survivors of the Void', 'icon': '🌀', 'color': '#a4f'},
+    'SOTS': {'name': 'Seekers of the Storm', 'icon': '⛈️', 'color': '#4af'},
+    'AC': {'name': 'Alloyed Collective', 'icon': '⚙️', 'color': '#fa4'},
+}
+
 # Global state
 # thread-safe pool state
 current_pool = []
 pool_lock = threading.Lock()
 
 current_config = {}
+enabled_dlcs = {'Base', 'SOTV', 'SOTS', 'AC'}  # All DLCs enabled by default
 optimizer = None
 optimization_thread = None
 history = OptimizationHistory()
@@ -62,16 +71,28 @@ def initialize_data():
     """Load items and synergy graph on startup."""
     global all_items, synergy_graph, current_config
     try:
-        all_items = load_items()
+        all_items = load_items(enabled_dlcs=enabled_dlcs)
         synergy_graph = load_synergy_graph()
         current_config = load_config()
-        print(f"✓ Loaded {len(all_items)} items")
+        print(f"✓ Loaded {len(all_items)} items (DLCs: {', '.join(enabled_dlcs)})")
         print(f"✓ Loaded synergy graph with {len(synergy_graph)} nodes")
     except Exception as e:
         print(f"⚠ Error loading data: {e}")
         all_items = []
         synergy_graph = {}
         current_config = {}
+
+
+def reload_items_for_dlcs():
+    """Reload items when DLC selection changes."""
+    global all_items
+    try:
+        all_items = load_items(enabled_dlcs=enabled_dlcs)
+        print(f"✓ Reloaded {len(all_items)} items (DLCs: {', '.join(enabled_dlcs)})")
+        return True
+    except Exception as e:
+        print(f"⚠ Error reloading items: {e}")
+        return False
 
 
 @app.route('/')
@@ -116,10 +137,70 @@ def get_items():
             'playstyles': item.get('Playstyles', []) or [],
             'category': item.get('Category', ''),
             'desc': item.get('Desc', ''),
+            'dlc': item.get('DLC', 'Base'),
             'in_pool': item.get('Name', '') in pool_names
         })
     
     return jsonify({'items': items_data})
+
+
+@app.route('/api/dlc', methods=['GET'])
+def get_dlc_status():
+    """Get available DLCs and their enabled status."""
+    dlc_list = []
+    for dlc_id, info in AVAILABLE_DLCS.items():
+        dlc_list.append({
+            'id': dlc_id,
+            'name': info['name'],
+            'icon': info['icon'],
+            'color': info['color'],
+            'enabled': dlc_id in enabled_dlcs
+        })
+    return jsonify({'dlcs': dlc_list})
+
+
+@app.route('/api/dlc', methods=['POST'])
+def set_dlc_status():
+    """Enable or disable a specific DLC."""
+    global enabled_dlcs, current_pool
+    
+    data = request.json or {}
+    dlc_id = data.get('dlc')
+    enable = data.get('enabled', True)
+    
+    if dlc_id not in AVAILABLE_DLCS:
+        return jsonify({'error': f'Unknown DLC: {dlc_id}'}), 400
+    
+    # Don't allow disabling Base game
+    if dlc_id == 'Base' and not enable:
+        return jsonify({'error': 'Cannot disable Base game'}), 400
+    
+    if enable:
+        enabled_dlcs.add(dlc_id)
+    else:
+        enabled_dlcs.discard(dlc_id)
+    
+    # Reload items with new DLC settings
+    reload_items_for_dlcs()
+    
+    # Remove any pool items that are no longer available
+    available_names = {item['Name'] for item in all_items}
+    removed_items = []
+    with pool_lock:
+        new_pool = []
+        for item in current_pool:
+            if item.get('Name') in available_names:
+                new_pool.append(item)
+            else:
+                removed_items.append(item.get('Name', 'Unknown'))
+        current_pool[:] = new_pool
+    
+    return jsonify({
+        'success': True,
+        'enabled_dlcs': list(enabled_dlcs),
+        'items_count': len(all_items),
+        'removed_from_pool': removed_items
+    })
 
 
 @app.route('/api/pool', methods=['GET'])
