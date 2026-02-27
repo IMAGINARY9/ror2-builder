@@ -19,14 +19,6 @@ This document outlines a roadmap for extending the Risk of Rain 2 item tools wit
 - [x] Call this during export and store in `WikiTips` column.
 - [ ] Optionally download and store drop source tables (categories) for reference.
 
-## 6. Testing & Validation
-
-- [x] Add `tests/` directory with unit tests for:
-  - `utils.lua_parse_items_module`
-  - `fetch_wiki_tips` (mock API responses)
-  - `build_pool` scoring logic
-- [x] Use `pytest` and include in CI pipeline (GitHub Actions).  <!-- tests added locally; CI still pending -->
-
 ## 3. Synergy Graph
 
 - [x] Define rules for generating synergy tags from categories/stats.  (heuristics already in utils)
@@ -91,31 +83,26 @@ added as an optional extra.
   Markdown with score).  HTML conversion may be handled externally if needed.
 - [ ] (Optional, low priority) add a built-in static HTML exporter using a
   templating library; not required for current scope, may be a plugin later.
-- [ ] (Optional future) prototype a Flask-based web UI if interactive
-  selection/search becomes a requirement.
-
-Add README examples for both Markdown and static HTML outputs.
+- [x] Flask-based web UI with real-time optimization (see [WEB_INTERFACE_GUIDE.md](WEB_INTERFACE_GUIDE.md)).
 
 ## 6. Testing & Validation
 
-- [ ] Add `tests/` directory with unit tests for:
-  - `utils.lua_parse_items_module`
-  - `fetch_wiki_tips` (mock API responses)
-  - `build_pool` scoring logic
-- [ ] Use `pytest` and include in CI pipeline (GitHub Actions).
+- [x] `tests/` directory with unit tests for scoring, optimizer, generator, and utilities.
+- [x] `pytest` framework in place. CI pipeline (GitHub Actions) still pending.
 
 ## 7. Documentation & CLI Help
 
-- [ ] Update README with new commands and examples.
-- [ ] Ensure `main.py` argparse help messages are descriptive.
-- [ ] Maintain change log for future enhancements.
+- [x] README updated with commands and examples.
+- [x] `main.py` argparse help messages are descriptive.
+- [x] Changelog maintained in [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md).
 
 ## 8. Optional Enhancements
 
-- [ ] Web server / Flask app to serve dynamic build generation.
+- [x] Web server / Flask app to serve dynamic build generation.
 - [ ] Graphical interface (Electron/React) for interactive selection.
 - [ ] Integration with game API (if available) to import actual gear.
 
 ---
 
-This plan is written in markdown for easy viewing; a machine-readable form could be added later (e.g. YAML checklist for project management).  Each task should be broken into PRs and tracked in the repository.
+For completed work details, see [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md).
+For algorithm design rationale, see [OPTIMIZATION_PLAN.md](OPTIMIZATION_PLAN.md).

@@ -411,7 +411,7 @@ def load_pool_from_file():
     global current_pool
     
     try:
-        import pandas as pd
+        import csv as csv_mod
         
         data = request.json
         filename = data.get('filename', 'pool_*.csv')
@@ -430,8 +430,9 @@ def load_pool_from_file():
             return jsonify({'success': False, 'error': 'File not found'}), 404
         
         # Load CSV
-        df = pd.read_csv(csv_path)
-        item_names = df['Name'].tolist()
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_mod.DictReader(f)
+            item_names = [row['Name'] for row in reader]
         
         # Find items by name
         current_pool = []
