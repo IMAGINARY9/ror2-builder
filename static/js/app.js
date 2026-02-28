@@ -159,6 +159,7 @@ async function loadConfig() {
     
     // Update slider value displays
     document.getElementById('kOptValue').textContent = config.optimization?.k_opt || 1;
+    document.getElementById('crossRarity').checked = config.optimization?.cross_rarity || false;
     document.getElementById('synergyWeightValue').textContent = (config.synergy_weight || 0.5).toFixed(1);
     document.getElementById('styleWeightValue').textContent = (config.style_weight || 8.0).toFixed(1);
     document.getElementById('diversityWeightValue').textContent = (config.diversity_weight || 1.0).toFixed(1);
@@ -1072,7 +1073,8 @@ async function getCurrentConfig() {
         pinned_items: Array.from(pinnedItems),
         optimization: {
             ...(baseConfig.optimization || {}),
-            k_opt: parseInt(document.getElementById('kOpt').value) || 1
+            k_opt: parseInt(document.getElementById('kOpt').value) || 1,
+            cross_rarity: document.getElementById('crossRarity').checked
         }
     };
 }

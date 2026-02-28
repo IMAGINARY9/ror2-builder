@@ -365,3 +365,106 @@ class TestTabuOptimization:
         # This test just confirms the flag is correct; the optimizer override
         # is covered by test_optimizer_never_revisits_state (it would hang
         # without aspiration enabled).
+
+
+# ---------------------------------------------------------------------------
+# Cross-rarity swap tests
+# ---------------------------------------------------------------------------
+
+class TestCrossRaritySwaps:
+    """Tests for cross-rarity k-opt swap generation."""
+
+    def _make_items(self):
+        """Build a small multi-rarity item set."""
+        return [
+            {'Name': 'C1', 'Rarity': 'Common', 'Playstyles': ['frenzy'], 'Category': 'Damage'},
+            {'Name': 'C2', 'Rarity': 'Common', 'Playstyles': ['cc'], 'Category': 'Utility'},
+            {'Name': 'C3', 'Rarity': 'Common', 'Playstyles': ['tank'], 'Category': 'Healing'},
+            {'Name': 'C4', 'Rarity': 'Common', 'Playstyles': ['frenzy'], 'Category': 'Damage'},
+            {'Name': 'U1', 'Rarity': 'Uncommon', 'Playstyles': ['frenzy'], 'Category': 'Damage'},
+            {'Name': 'U2', 'Rarity': 'Uncommon', 'Playstyles': ['cc'], 'Category': 'Utility'},
+            {'Name': 'U3', 'Rarity': 'Uncommon', 'Playstyles': ['tank'], 'Category': 'Healing'},
+            {'Name': 'U4', 'Rarity': 'Uncommon', 'Playstyles': ['cc'], 'Category': 'Utility'},
+            {'Name': 'L1', 'Rarity': 'Legendary', 'Playstyles': ['frenzy'], 'Category': 'Damage'},
+            {'Name': 'L2', 'Rarity': 'Legendary', 'Playstyles': ['tank'], 'Category': 'Healing'},
+        ]
+
+    def test_cross_rarity_disabled_no_mixed_swaps(self):
+        """With cross_rarity=False, no mixed-rarity swaps should appear."""
+        items = self._make_items()
+        pool = [items[0], items[1], items[4], items[5]]  # C1, C2, U1, U2
+        config = {'Common': 2, 'Uncommon': 2}
+
+        optimizer = LocalSearchOptimizer(items, config, k_opt=2, cross_rarity=False)
+        swaps = optimizer._generate_neighborhood(pool)
+
+        for swap in swaps:
+            assert swap.rarity != 'mixed', "No mixed swaps when cross_rarity=False"
+
+    def test_cross_rarity_enabled_generates_mixed_swaps(self):
+        """With cross_rarity=True and k=2, mixed-rarity swaps should appear."""
+        items = self._make_items()
+        pool = [items[0], items[1], items[4], items[5]]  # C1, C2, U1, U2
+        config = {'Common': 2, 'Uncommon': 2}
+
+        optimizer = LocalSearchOptimizer(items, config, k_opt=2, cross_rarity=True)
+        swaps = optimizer._generate_neighborhood(pool)
+
+        mixed_swaps = [s for s in swaps if s.rarity == 'mixed']
+        assert len(mixed_swaps) > 0, "Should generate cross-rarity swaps"
+
+    def test_cross_rarity_preserves_rarity_counts(self):
+        """Every cross-rarity swap must preserve the rarity multiset."""
+        items = self._make_items()
+        pool = [items[0], items[1], items[4], items[5]]  # C1, C2, U1, U2
+        config = {'Common': 2, 'Uncommon': 2}
+
+        optimizer = LocalSearchOptimizer(items, config, k_opt=2, cross_rarity=True)
+        swaps = optimizer._generate_neighborhood(pool)
+
+        from collections import Counter
+        for swap in swaps:
+            remove_rarities = Counter(item['Rarity'] for item in swap.remove)
+            add_rarities = Counter(item['Rarity'] for item in swap.add)
+            assert remove_rarities == add_rarities, (
+                f"Rarity mismatch: removed {remove_rarities} vs added {add_rarities}"
+            )
+
+    def test_cross_rarity_respects_pinned_items(self):
+        """Pinned items must not appear in the remove side of any swap."""
+        items = self._make_items()
+        pool = [items[0], items[1], items[4], items[5]]  # C1, C2, U1, U2
+        config = {'Common': 2, 'Uncommon': 2, 'pinned_items': ['C1']}
+
+        optimizer = LocalSearchOptimizer(items, config, k_opt=2, cross_rarity=True)
+        swaps = optimizer._generate_neighborhood(pool)
+
+        for swap in swaps:
+            removed_names = {item['Name'] for item in swap.remove}
+            assert 'C1' not in removed_names, "Pinned item C1 must not be removed"
+
+    def test_cross_rarity_ignored_when_k_is_1(self):
+        """cross_rarity has no effect when k=1 (no mixed combos possible)."""
+        items = self._make_items()
+        pool = [items[0], items[4]]  # C1, U1
+        config = {'Common': 1, 'Uncommon': 1}
+
+        optimizer = LocalSearchOptimizer(items, config, k_opt=1, cross_rarity=True)
+        swaps = optimizer._generate_neighborhood(pool)
+
+        for swap in swaps:
+            assert swap.rarity != 'mixed', "k=1 should never produce mixed swaps"
+
+    def test_cartesian_product(self):
+        """_cartesian_product should compute the correct product."""
+        result = LocalSearchOptimizer._cartesian_product([
+            [('a',), ('b',)],
+            [('x',), ('y',)],
+        ])
+        expected = {
+            (('a',), ('x',)),
+            (('a',), ('y',)),
+            (('b',), ('x',)),
+            (('b',), ('y',)),
+        }
+        assert set(result) == expected

@@ -10,6 +10,7 @@ import random
 import copy
 from typing import List, Dict, Tuple, Optional, Set, FrozenSet
 from dataclasses import dataclass, field
+from collections import Counter
 from itertools import combinations
 
 from .scoring import score_pool, compute_score_delta
@@ -20,7 +21,7 @@ class Swap:
     """Represents a k-opt swap operation."""
     remove: List[Dict]  # Items to remove from pool
     add: List[Dict]     # Items to add to pool
-    rarity: str         # Rarity being swapped (for validation)
+    rarity: str         # Rarity being swapped (single rarity or 'mixed')
     delta: float = 0.0  # Expected score change
     
     def __repr__(self):
@@ -137,7 +138,8 @@ class LocalSearchOptimizer:
         temperature_decay: float = 0.98,
         temperature_min: float = 0.1,
         tabu_tenure: Optional[int] = None,
-        random_seed: Optional[int] = None
+        random_seed: Optional[int] = None,
+        cross_rarity: bool = False
     ):
         """
         Initialize the optimizer.
@@ -156,6 +158,8 @@ class LocalSearchOptimizer:
                          ``None`` = infinite memory (default, strongest anti-cycling).
                          Set to a positive int for a sliding window.
             random_seed: Random seed for reproducibility
+            cross_rarity: Allow cross-rarity swaps (e.g. 1 red + 1 green ↔
+                          1 green + 1 red).  Only effective when k_opt >= 2.
         """
         self.items = items
         self.config = config
@@ -166,6 +170,7 @@ class LocalSearchOptimizer:
         self.temperature = temperature_initial
         self.temperature_decay = temperature_decay
         self.temperature_min = temperature_min
+        self.cross_rarity = cross_rarity
         
         # Tabu list (prevents cycling back to recently visited pool states)
         self.tabu = TabuList(tenure=tabu_tenure)
@@ -219,6 +224,10 @@ class LocalSearchOptimizer:
         """
         Generate all k-opt swaps that respect rarity constraints and pinned items.
         
+        When ``cross_rarity`` is enabled and k >= 2, also generates swaps
+        that span multiple rarities while preserving the rarity multiset
+        (e.g. remove 1 Common + 1 Legendary, add 1 Common + 1 Legendary).
+        
         Args:
             pool: Current pool
             k: Number of items to swap (defaults to self.k_opt)
@@ -236,7 +245,7 @@ class LocalSearchOptimizer:
         pool_by_rarity = self._partition_by_rarity(pool)
         available_by_rarity = self._partition_by_rarity(self.items, exclude=pool_names)
         
-        # For each rarity, generate k-combinations
+        # ---- Same-rarity swaps (original logic) ----
         for rarity in pool_by_rarity.keys():
             pool_items = pool_by_rarity[rarity]
             available_items = available_by_rarity.get(rarity, [])
@@ -260,7 +269,119 @@ class LocalSearchOptimizer:
                     )
                     swaps.append(swap)
         
+        # ---- Cross-rarity swaps (new) ----
+        if self.cross_rarity and k >= 2:
+            swaps.extend(self._generate_cross_rarity_swaps(pool, pool_by_rarity,
+                                                           available_by_rarity, k))
+        
         return swaps
+    
+    def _generate_cross_rarity_swaps(
+        self,
+        pool: List[Dict],
+        pool_by_rarity: Dict[str, List[Dict]],
+        available_by_rarity: Dict[str, List[Dict]],
+        k: int
+    ) -> List[Swap]:
+        """
+        Generate cross-rarity k-opt swaps that preserve the rarity multiset.
+        
+        For k items to remove, the added items must have the exact same
+        rarity distribution (e.g. {Common: 1, Legendary: 1}).
+        Only generates swaps that span at least 2 different rarities
+        (single-rarity combos are already covered by the main loop).
+        
+        To control combinatorial explosion, candidate additions are sampled
+        randomly when the full neighbourhood would exceed a size limit.
+        
+        Args:
+            pool: Current pool
+            pool_by_rarity: Pool items partitioned by rarity
+            available_by_rarity: Available (non-pool) items partitioned by rarity
+            k: Number of items to swap
+        
+        Returns:
+            List of cross-rarity Swap objects
+        """
+        MAX_CROSS_SWAPS = 2000  # cap to prevent combinatorial explosion
+        
+        # Build flat list of unpinned pool items across all rarities
+        unpinned_pool: List[Dict] = []
+        for rarity_items in pool_by_rarity.values():
+            unpinned_pool.extend(
+                item for item in rarity_items
+                if item['Name'] not in self.pinned_items
+            )
+        
+        if len(unpinned_pool) < k:
+            return []
+        
+        swaps: List[Swap] = []
+        
+        # Generate k-combinations from unpinned pool items (any rarity mix)
+        for items_to_remove in combinations(unpinned_pool, k):
+            rarity_counts = Counter(item['Rarity'] for item in items_to_remove)
+            
+            # Skip single-rarity combos (already handled by same-rarity logic)
+            if len(rarity_counts) < 2:
+                continue
+            
+            # Build candidate adds: for each rarity in the multiset,
+            # pick that many items from available_by_rarity[rarity].
+            # The cross product of per-rarity combos gives valid additions.
+            per_rarity_combos: List[List[Tuple]] = []
+            feasible = True
+            for rarity, count in rarity_counts.items():
+                candidates = available_by_rarity.get(rarity, [])
+                if len(candidates) < count:
+                    feasible = False
+                    break
+                per_rarity_combos.append(
+                    list(combinations(candidates, count))
+                )
+            
+            if not feasible:
+                continue
+            
+            # Cartesian product of per-rarity combos
+            add_combos = self._cartesian_product(per_rarity_combos)
+            
+            for add_tuple_of_tuples in add_combos:
+                items_to_add = []
+                for combo in add_tuple_of_tuples:
+                    items_to_add.extend(combo)
+                
+                swap = Swap(
+                    remove=list(items_to_remove),
+                    add=items_to_add,
+                    rarity='mixed'
+                )
+                swaps.append(swap)
+                
+                if len(swaps) >= MAX_CROSS_SWAPS:
+                    return swaps
+        
+        return swaps
+    
+    @staticmethod
+    def _cartesian_product(
+        lists: List[List[Tuple]]
+    ) -> List[Tuple[Tuple, ...]]:
+        """
+        Compute the Cartesian product of a list of lists of tuples.
+        
+        Args:
+            lists: List of lists, each containing tuples of items.
+        
+        Returns:
+            List of tuples, each containing one element from each input list.
+        """
+        if not lists:
+            return []
+        result = [()]
+        for pool_list in lists:
+            result = [existing + (item,) for existing in result for item in pool_list]
+        return result
     
     def _evaluate_swaps(
         self,

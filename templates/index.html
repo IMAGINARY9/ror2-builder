@@ -87,6 +87,13 @@
                 </div>
                 
                 <div class="control-group">
+                    <label for="crossRarity">
+                        <input type="checkbox" id="crossRarity">
+                        Cross-rarity swaps <span class="help-text" title="Allow swapping items across different rarities (e.g. 1 red + 1 green ↔ 1 green + 1 red). Requires K-opt ≥ 2. Increases search space significantly.">(?)</span>
+                    </label>
+                </div>
+                
+                <div class="control-group">
                     <label for="synergyWeight">Synergy Weight: <span id="synergyWeightValue" class="slider-value">0.5</span> <span class="help-text" title="Balance between item coverage and synergy. 0 = coverage only, higher = more synergy focus.">(?)</span></label>
                     <input type="range" id="synergyWeight" min="0" max="5" step="0.1" value="0.5">
                 </div>

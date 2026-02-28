@@ -19,6 +19,7 @@ def main():
     optimize.add_argument('--interactive', action='store_true', help='Enable interactive mode')
     optimize.add_argument('--max-iterations', type=int, help='Maximum optimization iterations')
     optimize.add_argument('--k-opt', type=int, help='Number of items to swap simultaneously (1 or 2)')
+    optimize.add_argument('--cross-rarity', action='store_true', help='Allow cross-rarity k-opt swaps (requires k >= 2)')
     optimize.add_argument('--convergence', type=int, help='Stop after N stale iterations')
     optimize.add_argument('--visualize', action='store_true', help='Generate score plot after completion')
     optimize.add_argument('--seed', type=int, help='Random seed for reproducibility')
@@ -57,6 +58,8 @@ def main():
             opt_config['max_iterations'] = args.max_iterations
         if args.k_opt:
             opt_config['k_opt'] = args.k_opt
+        if getattr(args, 'cross_rarity', False):
+            opt_config['cross_rarity'] = True
         if args.convergence:
             opt_config['convergence_threshold'] = args.convergence
         
@@ -74,7 +77,8 @@ def main():
             temperature_initial=opt_config.get('temperature_initial', 1.0),
             temperature_decay=opt_config.get('temperature_decay', 0.95),
             tabu_tenure=opt_config.get('tabu_tenure', None),
-            random_seed=args.seed
+            random_seed=args.seed,
+            cross_rarity=opt_config.get('cross_rarity', False)
         )
         
         # Create history tracker

@@ -489,8 +489,10 @@ def optimize_step():
         # Get k_opt from config - handle both nested and flat structures
         if 'optimization' in config and isinstance(config['optimization'], dict):
             k_opt = config['optimization'].get('k_opt', 1)
+            cross_rarity = config['optimization'].get('cross_rarity', False)
         else:
             k_opt = config.get('k_opt', 1)
+            cross_rarity = config.get('cross_rarity', False)
             
         synergy_weight = config.get('synergy_weight', 0.5)
         
@@ -499,7 +501,8 @@ def optimize_step():
             all_items, 
             config,
             k_opt=k_opt,
-            max_iterations=1  # Just one step
+            max_iterations=1,  # Just one step
+            cross_rarity=cross_rarity
         )
         optimizer.graph = synergy_graph
         optimizer.style = config.get('style')
@@ -580,6 +583,7 @@ def handle_start_optimization(data):
         max_iterations = config.get('optimization', {}).get('max_iterations', 50)
         convergence = config.get('optimization', {}).get('convergence_threshold', 10)
         tabu_tenure_val = config.get('optimization', {}).get('tabu_tenure', None)
+        cross_rarity = config.get('optimization', {}).get('cross_rarity', False)
         
         optimizer = LocalSearchOptimizer(
             all_items, config,
@@ -587,6 +591,7 @@ def handle_start_optimization(data):
             max_iterations=max_iterations,
             convergence_threshold=convergence,
             tabu_tenure=tabu_tenure_val,
+            cross_rarity=cross_rarity,
         )
         
         history = OptimizationHistory()

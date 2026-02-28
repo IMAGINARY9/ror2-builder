@@ -153,6 +153,7 @@ The pool generator and optimizer read `data/config.json` and support the followi
 - **optimization** – (optional) nested object with optimization parameters:
   - `max_iterations` – maximum optimization iterations (default: 100)
   - `k_opt` – number of items to swap simultaneously, 1 or 2 (default: 1)
+  - `cross_rarity` – allow cross-rarity k-opt swaps, e.g. swap 1 red + 1 green ↔ 1 green + 1 red. Only effective when `k_opt` ≥ 2. Increases search space significantly. (default: false)
   - `convergence_threshold` – stop after N stale iterations (default: 10)
   - `use_simulated_annealing` – accept worse solutions probabilistically (default: false)
   - `temperature_initial` – starting temperature for annealing (default: 1.0)
@@ -192,6 +193,7 @@ special flag is required; the legacy logic (`select_pool`) handles this.
   "optimization": {
     "max_iterations": 200,
     "k_opt": 2,
+    "cross_rarity": true,
     "convergence_threshold": 20,
     "use_simulated_annealing": true,
     "temperature_initial": 2.0,

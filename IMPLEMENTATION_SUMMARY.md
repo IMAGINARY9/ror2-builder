@@ -13,6 +13,7 @@
 
 - Local search algorithm with k-opt swaps (1-opt and 2-opt)
 - Rarity constraint preservation (all swaps maintain exact rarity counts)
+- **Cross-rarity k-opt swaps** — when `cross_rarity: true` and `k_opt >= 2`, the optimizer also explores swaps that span multiple rarities while preserving the rarity multiset (e.g. remove 1 Common + 1 Legendary, add 1 Common + 1 Legendary). Capped at 2 000 cross-rarity candidates per iteration to prevent combinatorial explosion.
 - Convergence detection, simulated annealing, fast delta computation
 - Random restart / perturbed pools to escape local optima
 - **Tabu list** (`TabuList` class) — tracks visited pool states as frozen name-sets to prevent cycling; configurable tenure (`null` = infinite memory); aspiration criterion overrides tabu when a swap beats the global best
