@@ -468,6 +468,14 @@ def load_pool_from_file():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/optimize/reset', methods=['POST'])
+def optimize_reset():
+    """Reset the step-by-step optimizer state (clears tabu list)."""
+    global step_tabu
+    step_tabu = TabuList()
+    return jsonify({'success': True})
+
+
 @app.route('/api/optimize/step', methods=['POST'])
 def optimize_step():
     """Perform a single optimization iteration."""
@@ -534,10 +542,8 @@ def optimize_step():
             if swap.delta <= 0:
                 break  # no improving swap left
             result_fp = TabuList.swap_result_fingerprint(current_fp, swap)
-            # Aspiration: allow tabu if it beats global best (use current best)
-            is_aspiration = (current_score + swap.delta) > current_score  # always true for delta > 0
-            if step_tabu.is_tabu(result_fp) and not is_aspiration:
-                continue
+            if step_tabu.is_tabu(result_fp):
+                continue  # skip visited states
             best_swap = swap
             break
         

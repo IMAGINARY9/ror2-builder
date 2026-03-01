@@ -70,15 +70,36 @@ h3 {
 
 .score-display {
     display: flex;
-    gap: 15px;
+    gap: 12px;
     align-items: center;
-    font-size: 1.2em;
+}
+
+.score-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 14px;
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    min-width: 70px;
+}
+
+.score-chip .label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+}
+
+.score-chip.best-chip {
+    border: 1px solid var(--success);
 }
 
 .score {
     font-weight: bold;
     color: var(--accent);
-    font-size: 1.5em;
+    font-size: 1.3em;
 }
 
 .score.best {
@@ -113,6 +134,22 @@ section {
 /* Pool Section */
 .pool-section {
     min-height: 600px;
+}
+
+.pool-count {
+    font-size: 0.65em;
+    color: var(--text-secondary);
+    font-weight: normal;
+}
+
+.pool-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.85em;
 }
 
 .drop-zone {
@@ -515,6 +552,12 @@ section {
     background: var(--accent-hover);
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(74, 158, 255, 0.3);
+}
+
+.btn-optimize {
+    padding: 12px 28px;
+    font-size: 1.05em;
+    letter-spacing: 0.3px;
 }
 
 .btn-secondary {

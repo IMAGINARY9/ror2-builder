@@ -159,7 +159,6 @@ async function loadConfig() {
     
     // Update slider value displays
     document.getElementById('kOptValue').textContent = config.optimization?.k_opt || 1;
-    document.getElementById('crossRarity').checked = config.optimization?.cross_rarity || false;
     document.getElementById('synergyWeightValue').textContent = (config.synergy_weight || 0.5).toFixed(1);
     document.getElementById('styleWeightValue').textContent = (config.style_weight || 8.0).toFixed(1);
     document.getElementById('diversityWeightValue').textContent = (config.diversity_weight || 1.0).toFixed(1);
@@ -189,6 +188,7 @@ function setupEventListeners() {
     
     // Optimization controls  
     document.getElementById('nextIteration').addEventListener('click', nextIteration);
+    document.getElementById('resetOptimization').addEventListener('click', resetOptimization);
     
     // Configuration controls
     document.getElementById('playStyle').addEventListener('change', async (e) => {
@@ -257,8 +257,6 @@ function setupEventListeners() {
     const paramHandler = () => {
         // Clear any running optimizer so nextIteration will reinitialize with new params
         if (currentOptimizer) currentOptimizer = null;
-        const nextBtn = document.getElementById('nextIteration');
-        if (nextBtn) nextBtn.disabled = false;
         showStatus('Parameters changed — optimizer reset', 'info');
     };
     if (kOptInput) {
@@ -449,9 +447,6 @@ async function addItemToPool(itemName) {
             if (currentOptimizer) {
                 currentOptimizer = null;
             }
-            // Re-enable manual optimize button after user change
-            const nextBtn = document.getElementById('nextIteration');
-            if (nextBtn) nextBtn.disabled = false;
             
             // Update scores
             const oldScore = currentScore;
@@ -516,9 +511,6 @@ async function removeItemFromPool(itemName) {
             if (currentOptimizer) {
                 currentOptimizer = null;
             }
-            // Re-enable manual optimize button after user change
-            const nextBtn = document.getElementById('nextIteration');
-            if (nextBtn) nextBtn.disabled = false;
             
             // Update scores
             const oldScore = currentScore;
@@ -651,10 +643,6 @@ async function updatePlayStyle(style) {
                 currentOptimizer = null;
             }
             
-            // Re-enable manual optimize button
-            const nextBtn = document.getElementById('nextIteration');
-            if (nextBtn) nextBtn.disabled = false;
-            
             // Recalculate score with new style
             await loadPoolState();
             updateUI();
@@ -757,8 +745,7 @@ async function nextIteration() {
                 'success'
             );
         } else {
-            showStatus('No improvement found. Pool is optimized!', 'info');
-            document.getElementById('nextIteration').disabled = true;
+            showStatus('No improvement found this step. Try adjusting parameters or items.', 'info');
         }
     } catch (error) {
         showStatus('Error: ' + error.message, 'error');
@@ -768,11 +755,11 @@ async function nextIteration() {
 function resetOptimization() {
     currentOptimizer = null;
     iterationCount = 0;
+    bestScore = 0;
     document.getElementById('iterationCount').textContent = '0';
     document.getElementById('historyTable').innerHTML = '';
-    // Ensure the manual optimize button is available after a reset
-    const nextBtn = document.getElementById('nextIteration');
-    if (nextBtn) nextBtn.disabled = false;
+    // Clear server-side tabu list so optimization starts fresh
+    fetch('/api/optimize/reset', { method: 'POST' }).catch(() => {});
     showStatus('Optimization reset', 'info');
 }
 
@@ -882,6 +869,10 @@ function updateUI() {
     // Update scores
     document.getElementById('currentScore').textContent = currentScore.toFixed(2);
     document.getElementById('bestScore').textContent = bestScore.toFixed(2);
+    
+    // Update pool count
+    const poolCountEl = document.getElementById('poolCount');
+    if (poolCountEl) poolCountEl.textContent = `(${currentPool.length})`;
     
     // Render pool (also updates allItems.in_pool)
     renderPool();
@@ -999,8 +990,7 @@ function refreshAvailableItemsStatus() {
 }
 
 function updateOptimizationButtons() {
-    const isRunning = currentOptimizer !== null;
-    document.getElementById('nextIteration').disabled = currentPool.length === 0;
+    // Button is always available — user can click it anytime
 }
 
 function showStatus(message, type = 'info') {
@@ -1074,7 +1064,7 @@ async function getCurrentConfig() {
         optimization: {
             ...(baseConfig.optimization || {}),
             k_opt: parseInt(document.getElementById('kOpt').value) || 1,
-            cross_rarity: document.getElementById('crossRarity').checked
+            cross_rarity: true
         }
     };
 }

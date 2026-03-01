@@ -12,12 +12,18 @@
         <header>
             <h1>🎮 Risk of Rain 2 - Pool Optimizer</h1>
             <div class="score-display">
-                <span class="label">Iteration:</span>
-                <span id="iterationCount" class="score">0</span>
-                <span class="label">Current Score:</span>
-                <span id="currentScore" class="score">0</span>
-                <span class="label">Best:</span>
-                <span id="bestScore" class="score best">0</span>
+                <div class="score-chip">
+                    <span class="label">Iteration</span>
+                    <span id="iterationCount" class="score">0</span>
+                </div>
+                <div class="score-chip">
+                    <span class="label">Score</span>
+                    <span id="currentScore" class="score">0</span>
+                </div>
+                <div class="score-chip best-chip">
+                    <span class="label">Best</span>
+                    <span id="bestScore" class="score best">0</span>
+                </div>
             </div>
         </header>
 
@@ -26,10 +32,12 @@
             <!-- Current Pool (Drop Zone) -->
             <section class="pool-section">
                 <div class="section-header">
-                    <h2>Current Pool</h2>
-                    <button id="savePool" class="btn btn-secondary">Save</button>
-                    <button id="clearPool" class="btn btn-secondary">Clear</button>
-                    <button id="randomPool" class="btn btn-secondary">Init (Random)</button>
+                    <h2>Current Pool <span id="poolCount" class="pool-count">(0)</span></h2>
+                    <div class="pool-actions">
+                        <button id="savePool" class="btn btn-secondary btn-sm">💾 Save</button>
+                        <button id="clearPool" class="btn btn-secondary btn-sm">🗑️ Clear</button>
+                        <button id="randomPool" class="btn btn-secondary btn-sm">🎲 Random</button>
+                    </div>
                 </div>
                 
                 <div id="poolDropZone" class="drop-zone pool-zone">
@@ -86,13 +94,7 @@
                     <input type="range" id="kOpt" min="1" max="5" step="1" value="1">
                 </div>
                 
-                <div class="control-group">
-                    <label for="crossRarity">
-                        <input type="checkbox" id="crossRarity">
-                        Cross-rarity swaps <span class="help-text" title="Allow swapping items across different rarities (e.g. 1 red + 1 green ↔ 1 green + 1 red). Requires K-opt ≥ 2. Increases search space significantly.">(?)</span>
-                    </label>
-                </div>
-                
+
                 <div class="control-group">
                     <label for="synergyWeight">Synergy Weight: <span id="synergyWeightValue" class="slider-value">0.5</span> <span class="help-text" title="Balance between item coverage and synergy. 0 = coverage only, higher = more synergy focus.">(?)</span></label>
                     <input type="range" id="synergyWeight" min="0" max="5" step="0.1" value="0.5">
@@ -120,7 +122,8 @@
             </div>
             
             <div class="control-buttons">
-                <button id="nextIteration" class="btn btn-primary">Optimize (Next Step)</button>
+                <button id="nextIteration" class="btn btn-primary btn-optimize">Optimize (Next Step)</button>
+                <button id="resetOptimization" class="btn btn-secondary">↺ Reset</button>
             </div>
             
             <div id="optimizationStatus" class="status-bar">
