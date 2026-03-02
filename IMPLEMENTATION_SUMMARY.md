@@ -47,6 +47,7 @@
 
 - `clean_wiki_markup()` — strips RoR2 Fandom wiki template syntax (`{{Color|…}}`, `{{Stack|…}}`) from item descriptions
 - Applied in both the Markdown export (reports) and the web API (`/api/items` returns `clean_desc`)
+- **Bug fix (Mar 2026)**: Description field was unformatted when viewing pool cards because pool endpoints returned raw descriptions. Added `clean_desc` to every item when loading CSV and ensured all `/api/pool` routes propagate it; front‑end now displays the cleaned text consistently.
 
 ### CLI Integration (`main.py`)
 

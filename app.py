@@ -142,7 +142,8 @@ def get_items():
             'category': item.get('Category', ''),
             'stats': item.get('Stats', ''),
             'desc': item.get('Desc', ''),
-            'clean_desc': clean_wiki_markup(item.get('Desc', '')),
+            # prefer precomputed field when available
+            'clean_desc': item.get('clean_desc') or clean_wiki_markup(item.get('Desc', '')),
             'dlc': item.get('DLC', 'Base'),
             'in_pool': item.get('Name', '') in pool_names
         })

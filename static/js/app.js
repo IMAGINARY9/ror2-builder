@@ -910,6 +910,8 @@ function renderPool() {
             playstyles: item.Playstyles || item.playstyles || [],
             category: item.Category || item.category || '',
             desc: item.Desc || item.desc || '',
+            // ensure cleaned description travels with pool entries
+            clean_desc: item.clean_desc || '',
             in_pool: true
         };
         

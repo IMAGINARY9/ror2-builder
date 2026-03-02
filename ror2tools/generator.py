@@ -62,6 +62,8 @@ def load_items(path=ITEMS_CSV, enabled_dlcs=None):
             # comma-separated lists may be empty strings
             r['SynergyTags'] = [t for t in r.get('SynergyTags', '').split(',') if t]
             r['Playstyles'] = [p for p in r.get('Playstyles', '').split(',') if p]
+            # pre-compute cleaned description so callers don't need to repeat logic
+            r['clean_desc'] = clean_wiki_markup(r.get('Desc', ''))
             items.append(r)
     return items
 
