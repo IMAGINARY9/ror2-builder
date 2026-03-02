@@ -77,7 +77,8 @@ def get_scoring_params(config):
         'diversity_weight': config.get('diversity_weight', 1.0),
         'coverage_weight': config.get('coverage_weight', 1.0),
         'balance_weight': config.get('balance_weight', 5.0),
-        'pinned_items': config.get('pinned_items', [])
+        'pinned_items': config.get('pinned_items', []),
+        'pin_synergy_bonus': config.get('pin_synergy_bonus', 1.5)
     }
 
 

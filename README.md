@@ -142,6 +142,13 @@ The pool generator and optimizer read `data/config.json` and support the followi
 - **synergy_weight** – floating multiplier applied to the graph-based
   synergy score when using `build`; higher values favor items with more
   shared tags.
+- **pinned_items** – optional list of item names that should remain fixed
+  in the pool.  The optimizer will never remove these items, and swaps are
+  biased to maximize synergy with them.
+- **pin_synergy_bonus** – additional score bonus per synergy edge involving
+  a pinned item.  This makes the fixed item the focal point of each
+  replacement; set higher values to force the optimizer to treat pinned
+  connections as much more important than ordinary pairwise synergy.
 - **graph_max_ratio** – (optional) upper threshold for tag frequency when
   building the internal synergy graph.  Tags present in more than this
   fraction of the item pool are ignored.  Default 0.25.  For very small

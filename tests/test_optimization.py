@@ -83,6 +83,25 @@ def test_score_breakdown():
     assert breakdown['weighted_synergy'] == 4.0
     assert breakdown['total'] == 6.0
 
+    # verify pin synergy fields when a pinned item is present
+    breakdown_pin = score_breakdown(
+        pool + [{'Name': 'P', 'Playstyles': [], 'Rarity': 'Common', 'Category': 'Damage'}],
+        {'A': {'P': 3}, 'P': {'A': 3}},
+        'frenzy',
+        synergy_weight=1.0,
+        style_weight=0,
+        diversity_weight=0,
+        coverage_weight=0,
+        balance_weight=0,
+        pinned_items=['P'],
+        pin_synergy_bonus=2.0
+    )
+    # the pinned edge appears in both directions (A→P and P→A), so
+    # raw pin_synergy equals 6 and weighted version doubles again via bonus
+    assert breakdown_pin['pin_synergy'] == 6.0
+    assert breakdown_pin['weighted_pin_synergy'] == 12.0
+    assert breakdown_pin['total'] >= breakdown_pin['weighted_pin_synergy']
+
 
 def test_optimizer_initialization():
     """Test optimizer can be initialized."""
@@ -442,6 +461,31 @@ class TestCrossRaritySwaps:
         for swap in swaps:
             removed_names = {item['Name'] for item in swap.remove}
             assert 'C1' not in removed_names, "Pinned item C1 must not be removed"
+
+    def test_pin_synergy_biases_selection(self):
+        """Swaps that improve synergy with a pinned item should rank higher."""
+        # Setup a minimal universe where only pinned synergy differs
+        items = [
+            {'Name': 'P', 'Rarity': 'Common', 'Playstyles': [], 'Category': 'Damage'},
+            {'Name': 'C', 'Rarity': 'Common', 'Playstyles': [], 'Category': 'Damage'},
+            {'Name': 'A', 'Rarity': 'Common', 'Playstyles': [], 'Category': 'Damage'},
+            {'Name': 'B', 'Rarity': 'Common', 'Playstyles': [], 'Category': 'Damage'},
+        ]
+        pool = [items[0], items[1]]  # P and C
+        # set a noticeable synergy bonus so the effect is unambiguous
+        config = {'Common': 2, 'pinned_items': ['P'], 'pin_synergy_bonus': 5.0}
+
+        optimizer = LocalSearchOptimizer(items, config, k_opt=1)
+        # inject a simple graph: P-A has weight 2, P-B weight 1
+        optimizer.graph = {'P': {'A': 2, 'B': 1}, 'A': {'P': 2}, 'B': {'P': 1}}
+
+        swaps = optimizer._generate_neighborhood(pool)
+        evaluated = optimizer._evaluate_swaps(pool, swaps)
+
+        # locate the two candidate swaps
+        delta_a = next(s.delta for s in evaluated if s.add[0]['Name'] == 'A')
+        delta_b = next(s.delta for s in evaluated if s.add[0]['Name'] == 'B')
+        assert delta_a > delta_b, "Swap adding item A (stronger pin synergy) should be preferred"
 
     def test_cross_rarity_ignored_when_k_is_1(self):
         """cross_rarity has no effect when k=1 (no mixed combos possible)."""

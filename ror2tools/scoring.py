@@ -211,7 +211,8 @@ def score_pool(
     coverage_weight: float = 1.0,
     balance_weight: float = 5.0,
     pinned_items: Optional[List[str]] = None,
-    pin_bonus: float = 2.0
+    pin_bonus: float = 2.0,
+    pin_synergy_bonus: float = 1.5
 ) -> float:
     """
     Compute a numeric score for an item pool with enhanced scoring.
@@ -227,6 +228,9 @@ def score_pool(
         balance_weight: Multiplier for category balance (default 5.0)
         pinned_items: List of pinned item names (core items)
         pin_bonus: Score bonus per pinned item (default 2.0)
+        pin_synergy_bonus: Additional score per synergy edge involving a
+            pinned item.  This makes connections to fixed items much more
+            influential than ordinary pairwise synergy (default 1.5).
     
     Returns:
         Total score (higher is better)
@@ -238,6 +242,8 @@ def score_pool(
         4. Tag coverage: unique tags * coverage_weight
         5. Category balance: entropy across Damage/Utility/Healing * balance_weight
         6. Pinned items: count * pin_bonus
+        7. Bonus synergy with pinned items: edges involving pinned items
+           contribute an extra * pin_synergy_bonus
     """
     score = 0.0
     
@@ -256,13 +262,20 @@ def score_pool(
     # Component 2: Sum pairwise synergy from graph
     if graph and synergy_weight:
         synergy_score = 0.0
+        pinned_set = set(pinned_items) if pinned_items else set()
         for i in range(len(pool)):
             for j in range(i + 1, len(pool)):
                 name_a = pool[i]['Name']
                 name_b = pool[j]['Name']
                 # Synergy is symmetric, so check both directions
-                synergy_score += graph.get(name_a, {}).get(name_b, 0)
-                synergy_score += graph.get(name_b, {}).get(name_a, 0)
+                base_syn = graph.get(name_a, {}).get(name_b, 0)
+                base_syn += graph.get(name_b, {}).get(name_a, 0)
+                if base_syn == 0:
+                    continue
+                synergy_score += base_syn
+                # Bonus for edges touching a pinned item
+                if (name_a in pinned_set) or (name_b in pinned_set):
+                    score += base_syn * pin_synergy_bonus
         score += synergy_score * synergy_weight
     
     # Component 3: Rarity diversity bonus
@@ -422,7 +435,8 @@ def score_breakdown(
     coverage_weight: float = 1.0,
     balance_weight: float = 5.0,
     pinned_items: Optional[List[str]] = None,
-    pin_bonus: float = 2.0
+    pin_bonus: float = 2.0,
+    pin_synergy_bonus: float = 1.5
 ) -> Dict[str, float]:
     """
     Return detailed score breakdown for analysis/display.
@@ -439,6 +453,9 @@ def score_breakdown(
             - 'weighted_coverage': Coverage after applying weight
             - 'pin_score': Number of pinned items (raw count)
             - 'weighted_pin': Pin score after applying weight
+            - 'pin_synergy': Raw total of synergy edges involving pinned items
+            - 'weighted_pin_synergy': That value multiplied by
+              *pin_synergy_bonus*
             - 'total': Total score
     """
     breakdown = {
@@ -494,11 +511,29 @@ def score_breakdown(
         pinned_set = set(pinned_items)
         breakdown['pin_score'] = sum(1.0 for item in pool if item.get('Name') in pinned_set)
         breakdown['weighted_pin'] = breakdown['pin_score'] * pin_bonus
+    # account for pinned-synergy bonus in breakdown
+    if graph and pinned_items and pin_synergy_bonus:
+        pinned_set = set(pinned_items)
+        extra = 0.0
+        for i in range(len(pool)):
+            for j in range(i + 1, len(pool)):
+                name_a = pool[i]['Name']
+                name_b = pool[j]['Name']
+                if name_a in pinned_set or name_b in pinned_set:
+                    base_syn = graph.get(name_a, {}).get(name_b, 0)
+                    base_syn += graph.get(name_b, {}).get(name_a, 0)
+                    extra += base_syn
+        breakdown['pin_synergy'] = extra
+        breakdown['weighted_pin_synergy'] = breakdown['pin_synergy'] * pin_synergy_bonus
     
+    # compute total from base components first
     breakdown['total'] = (breakdown['weighted_style'] + 
                           breakdown['weighted_synergy'] +
                           breakdown['weighted_diversity'] +
                           breakdown['weighted_coverage'] +
                           breakdown['weighted_balance'] +
                           breakdown['weighted_pin'])
+    # add the pin-synergy bonus last so it isn't overwritten
+    if pinned_items and pin_synergy_bonus and 'weighted_pin_synergy' in breakdown:
+        breakdown['total'] += breakdown['weighted_pin_synergy']
     return breakdown

@@ -183,6 +183,10 @@ class LocalSearchOptimizer:
         self.coverage_weight = config.get('coverage_weight', 1.0)
         self.balance_weight = config.get('balance_weight', 5.0)
         self.pinned_items = set(config.get('pinned_items', []))  # Items user wants to keep
+        # Bonus applied to any synergy edge touching a pinned item; makes
+        # the fixed item truly the center of the build rather than a
+        # marginal +2 score.
+        self.pin_synergy_bonus = config.get('pin_synergy_bonus', 1.5)
         self.graph = None  # Will be loaded when needed
         
         if random_seed is not None:
@@ -412,7 +416,7 @@ class LocalSearchOptimizer:
                 balance_weight=self.balance_weight,
                 pinned_items=self.pinned_items,
                 pin_bonus=2.0,
-                pin_synergy_bonus=1.5
+                pin_synergy_bonus=self.pin_synergy_bonus
             )
         
         # Sort by delta descending (best improvements first)

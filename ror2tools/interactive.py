@@ -184,7 +184,10 @@ class InteractiveCLI:
             [item_to_add],
             self.optimizer.graph,
             self.optimizer.style,
-            self.optimizer.synergy_weight
+            self.optimizer.synergy_weight,
+            # propagate pinned configuration for correctness
+            pinned_items=list(self.optimizer.pinned_items),
+            pin_synergy_bonus=self.optimizer.pin_synergy_bonus
         )
         
         # Apply swap
