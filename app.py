@@ -52,6 +52,16 @@ def get_pool_copy():
         return list(current_pool)
 
 
+def _format_field(text: str) -> str:
+    """Insert spaces around commas and equals for nicer display.
+
+    This mirrors the client-side formatting to keep API consumers happy.
+    """
+    if not text:
+        return text
+    return text.replace(',', ', ').replace('=', ' = ')
+
+
 def set_pool(new_pool):
     global current_pool
     with pool_lock:
@@ -132,6 +142,8 @@ def get_items():
         # Use image URL directly from CSV
         image_url = item.get('Image', '') or ''
         
+        stats_text = item.get('Stats', '')
+        category_text = item.get('Category', '')
         items_data.append({
             'name': item.get('Name', 'Unknown'),
             'rarity': ui_rarity,
@@ -139,8 +151,10 @@ def get_items():
             'image': image_url,
             'tags': item.get('SynergyTags', []) or [],
             'playstyles': item.get('Playstyles', []) or [],
-            'category': item.get('Category', ''),
-            'stats': item.get('Stats', ''),
+            'category': category_text,
+            'formatted_category': _format_field(category_text),
+            'stats': stats_text,
+            'formatted_stats': _format_field(stats_text),
             'desc': item.get('Desc', ''),
             # prefer precomputed field when available
             'clean_desc': item.get('clean_desc') or clean_wiki_markup(item.get('Desc', '')),

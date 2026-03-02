@@ -20,6 +20,9 @@ def test_items_endpoint_includes_clean_desc(client):
     assert 'items' in data
     # every item should have the cleaned description field
     assert all('clean_desc' in item for item in data['items'])
+    # formatted stats/category should also be provided (may be empty)
+    assert all('formatted_stats' in item for item in data['items'])
+    assert all('formatted_category' in item for item in data['items'])
     # basic sanity: clean_desc should not contain any template braces
     for item in data['items'][:5]:
         assert '{{' not in item['clean_desc']

@@ -1018,6 +1018,13 @@ function showItemDetails(item) {
     const category = item.category || 'Unknown';
     const dlc = item.dlc || 'Base';
 
+    // helper formatting for presentation
+    const formatStats = s => s.replace(/,/g, ', ').replace(/=/g, ' = ');
+    const formatCategory = c => c.replace(/,/g, ', ');
+
+    const statsFormatted = stats ? formatStats(stats) : '';
+    const categoryFormatted = formatCategory(category);
+
     // Rarity colour mapping
     const rarityColors = {
         white: '#FFFFFF', green: '#50C878', red: '#FF4500',
@@ -1041,8 +1048,8 @@ function showItemDetails(item) {
             </div>
         </div>
         <p style="color:#ccc;line-height:1.5">${desc}</p>
-        ${stats ? `<p><strong>Stats:</strong> ${stats}</p>` : ''}
-        <p><strong>Category:</strong> ${category}</p>
+        ${statsFormatted ? `<p><strong>Stats:</strong> ${statsFormatted}</p>` : ''}
+        <p><strong>Category:</strong> ${categoryFormatted}</p>
         <p><strong>Tags:</strong> ${(item.tags || []).join(', ') || 'None'}</p>
         <p><strong>Playstyles:</strong> ${(item.playstyles || []).join(', ') || 'None'}</p>
     `;

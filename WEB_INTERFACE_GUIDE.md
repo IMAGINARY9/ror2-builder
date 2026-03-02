@@ -110,8 +110,8 @@ Edit `data/config.json` to customize:
 
 For advanced users building integrations:
 
-- `GET /api/items` - Get all items (each object includes `clean_desc`, a pre‑formatted description with wiki markup removed)
-- `GET /api/pool` - Get current pool and score (pool entries also include `clean_desc` so cards display nicely)
+- `GET /api/items` - Get all items (each object includes `clean_desc`, a pre‑formatted description with wiki markup removed, plus `formatted_stats`/`formatted_category` which insert spaces around commas/equals for nicer display)
+- `GET /api/pool` - Get current pool and score (pool entries also include `clean_desc`, `formatted_stats`, and `formatted_category` so cards display nicely)
 - `POST /api/pool` - Update entire pool
 - `POST /api/pool/add` - Add item to pool
 - `POST /api/pool/remove` - Remove item from pool
