@@ -6,6 +6,18 @@ A Python toolkit for Risk of Rain 2 item management: wiki data export, random po
 
 ---
 
+## Environment Setup
+
+- The workspace uses a Python virtual environment under `.venv`.
+- **Always activate the venv before running any Python command or tests.**
+  - On Windows PowerShell: `& .venv\Scripts\Activate.ps1`
+  - On Unix/macOS: `source .venv/bin/activate`
+- Once activated, install dependencies with `pip install -r requirements.txt`.
+- All guidance and tests assume the correct interpreter is selected and the venv is active.
+
+
+---
+
 ## Documentation Hygiene Rules
 
 ### Single Source of Truth Principle
