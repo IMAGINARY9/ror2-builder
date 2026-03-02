@@ -557,6 +557,7 @@ async function clearPool() {
         if (data.success) {
             currentPool = [];
             currentScore = 0;
+            bestScore = 0;             // make sure best is also reset
             renderItems();
             updateUI();
             showStatus('Pool cleared', 'success');
@@ -659,6 +660,10 @@ async function generateRandomPool() {
     
     // Reset optimization state
     resetOptimization();
+    // immediately clear scores to avoid transient stale display
+    currentScore = 0;
+    bestScore = 0;
+    updateUI();
     
     try {
         const response = await fetch('/api/pool/random', {
@@ -677,6 +682,11 @@ async function generateRandomPool() {
             if (data.pool) {
                 currentPool = data.pool;
             }
+            // update scores from server response
+            currentScore = data.score || 0;
+            // treat the freshly generated pool as both current AND best;
+            // discard any previous bestScore so the UI doesn't show a stale value
+            bestScore = currentScore;
             renderItems();
             updateUI();
             showStatus('Random pool generated!', 'success');

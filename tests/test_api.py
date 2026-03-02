@@ -60,6 +60,16 @@ def test_pool_responses_always_include_clean_desc(client):
 
     # generate random pool and confirm clean_desc persists
     resp4 = client.post('/api/pool/random', json={'config': {}})
-    pool4 = resp4.get_json()['pool']
+    payload4 = resp4.get_json()
+    pool4 = payload4['pool']
+    # the endpoint should also return a score for the new pool
+    assert 'score' in payload4
+    assert isinstance(payload4['score'], (int, float))
     assert pool4
     assert all('clean_desc' in it for it in pool4)
+    
+    # clearing the pool via POST should return zero score
+    resp5 = client.post('/api/pool', json={'items': []})
+    payload5 = resp5.get_json()
+    assert payload5['score'] == 0
+    assert payload5['pool'] == []
