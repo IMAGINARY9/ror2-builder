@@ -216,6 +216,12 @@ def set_dlc_status():
             else:
                 removed_items.append(item.get('Name', 'Unknown'))
         current_pool[:] = new_pool
+    # If an optimizer is mid-run, update its item list so future swaps
+    # no longer consider disabled content.  We do not restart the run but
+    # sanitization in the next iteration will clean the working pool as
+    # well (optimizer.optimize already handles that at start).
+    if optimizer is not None:
+        optimizer.items = all_items
     
     return jsonify({
         'success': True,
@@ -630,6 +636,7 @@ def handle_start_optimization(data):
                         'best_score': state.best_score,
                         'stale': state.stale_iterations,
                         'pool': [item['Name'] for item in state.pool],
+                        'sanitized_removed': getattr(state, 'sanitized_removed', []),
                         'last_swap': {
                             'removed': [item['Name'] for item in state.last_swap.remove] if state.last_swap else [],
                             'added': [item['Name'] for item in state.last_swap.add] if state.last_swap else [],

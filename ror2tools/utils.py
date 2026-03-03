@@ -231,7 +231,7 @@ def load_synergy_graph(path=None):
             'Charged Perforator', 'Molten Perforator', 'Sentient Meat Hook',
             'Shatterspleen', 'Needletick', 'Polylute', "Lens-Maker's Glasses",
             "Harvester's Scythe", 'Predatory Instincts', 'Brittle Crown',
-            'Deus Ex Machina', 'Bottled Chaos', 'Runic Lens', 'Noxious Thorn',
+            'Deus Ex Machina', 'Runic Lens', 'Noxious Thorn',
             'Symbiotic Scorpion', 'Chance Doll'
         ]
     }

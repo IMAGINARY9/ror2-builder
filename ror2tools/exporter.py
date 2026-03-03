@@ -16,6 +16,44 @@ import json
 from .utils import DATA_DIR, OUTPUT_DIR, fetch_wiki_tips, compute_synergy_tags, compute_playstyles
 from .generator import load_config
 
+# Equipment items do not carry Category data in the Lua module, so we maintain
+# a curated fallback mapping.  Keys are the canonical wiki item names; values
+# are comma-separated Damage/Utility/Healing category strings (same format as
+# regular items).
+_EQUIPMENT_CATEGORY_FALLBACK: dict = {
+    'Blast Shower':                         'Utility',
+    'Deus Ex Machina':                      'Damage',
+    'Eccentric Vase':                       'Utility',
+    'Executive Card':                       'Utility',
+    'Foreign Fruit':                        'Healing',
+    'Fuel Array':                           'Damage',
+    'Disposable Missile Launcher':          'Damage',
+    'Gnarled Woodsprite':                   'Healing',
+    'Goobo Jr.':                            'Utility',
+    "Gorag's Opus":                         'Damage',
+    'Forgive Me Please':                    'Utility',
+    'Milky Chrysalis':                      'Utility',
+    'Molotov (6-Pack)':                     'Damage',
+    'Jade Elephant':                        'Utility',
+    'Ocular HUD':                           'Damage',
+    'Preon Accumulator':                    'Damage',
+    'Primordial Cube':                      'Utility',
+    'Radar Scanner':                        'Utility',
+    'Recycler':                             'Utility',
+    'Remote Caffeinator':                   'Healing',
+    'Royal Capacitor':                      'Damage',
+    'Sawmerang':                            'Damage',
+    'Seed of Life':                         'Healing',
+    'Seed of Life (Consumed)':              'Healing',
+    'Super Massive Leech':                  'Healing',
+    'The Back-up':                          'Damage',
+    'The Crowdfunder':                      'Damage',
+    "Trophy Hunter's Tricorn":              'Damage',
+    "Trophy Hunter's Tricorn (Consumed)":   'Damage',
+    'Volcanic Egg':                         'Damage,Utility',
+}
+
+
 def export_items(output_csv=None):
     if output_csv is None:
         output_csv = os.path.join(DATA_DIR, 'items.csv')
@@ -45,6 +83,10 @@ def export_items(output_csv=None):
             data = module_items.get(name, {})
             rarity = data.get('Rarity', '')
             category_list = data.get('Category', [])
+            # Equipment items rarely carry Category data in the Lua module.
+            # Apply curated fallback when none was parsed.
+            if not category_list and name in _EQUIPMENT_CATEGORY_FALLBACK:
+                category_list = [c.strip() for c in _EQUIPMENT_CATEGORY_FALLBACK[name].split(',')]
             category = ','.join(category_list)
             desc = data.get('Desc', '')
             stats_list = data.get('Stats', [])

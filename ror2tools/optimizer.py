@@ -41,6 +41,9 @@ class OptimizationState:
     best_score: float
     last_swap: Optional[Swap] = None
     tabu_skipped: int = 0  # Swaps skipped due to tabu this iteration
+    # names of any items dropped from the initial pool because they were not
+    # present in the optimizer's item list (typically disabled DLC items).
+    sanitized_removed: List[str] = field(default_factory=list)
 
 
 class TabuList:
@@ -568,8 +571,36 @@ class LocalSearchOptimizer:
         # Initialize pool
         if initial_pool is None:
             pool = self._generate_initial_pool()
+            sanitized_removed = []
         else:
             pool = copy.deepcopy(initial_pool)
+            # Remove any items that are no longer available (e.g. user
+            # disabled a DLC after the pool was created).  When items are
+            # dropped we try to backfill with a random replacement of the
+            # same rarity so the pool size remains constant.  The list of
+            # removed names is stored for diagnostics.
+            allowed_names = {it['Name'] for it in self.items}
+            sanitized_removed = []
+            new_pool = []
+            for item in pool:
+                if item['Name'] in allowed_names:
+                    new_pool.append(item)
+                else:
+                    sanitized_removed.append(item['Name'])
+            if sanitized_removed:
+                used_names = {it['Name'] for it in new_pool}
+                for removed_name in sanitized_removed:
+                    orig = next((it for it in pool if it['Name'] == removed_name), None)
+                    if not orig:
+                        continue
+                    rarity = orig.get('Rarity')
+                    candidates = [it for it in self.items
+                                  if it.get('Rarity') == rarity and it['Name'] not in used_names]
+                    if candidates:
+                        choice = random.choice(candidates)
+                        new_pool.append(choice)
+                        used_names.add(choice['Name'])
+            pool = new_pool
         
         # Compute initial score
         current_score = score_pool(
@@ -585,7 +616,8 @@ class LocalSearchOptimizer:
             iteration=0,
             stale_iterations=0,
             best_pool=copy.deepcopy(pool),
-            best_score=current_score
+            best_score=current_score,
+            sanitized_removed=sanitized_removed
         )
         
         # Record initial pool in tabu list so we never cycle back to it

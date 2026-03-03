@@ -164,6 +164,34 @@ def test_optimizer_generate_initial_pool():
     assert len(uncommons) == 2
 
 
+def test_pool_sanitization_removes_unavailable_items():
+    """If the initial pool contains names not present in the item set,
+    they should be dropped and replaced where possible.
+    """
+    allowed = [
+        {'Name': f'Allowed{i}', 'Rarity': 'Common', 'Playstyles': []}
+        for i in range(5)
+    ]
+    # item that is not part of the optimizer's item list (simulates a
+    # disabled DLC item)
+    disabled = {'Name': 'Banana', 'Rarity': 'Common', 'Playstyles': []}
+
+    items = allowed.copy()
+    config = {'Common': 3}
+    optimizer = LocalSearchOptimizer(items, config, k_opt=1, max_iterations=0)
+
+    # build a pool containing two allowed items and the disabled one
+    initial_pool = [allowed[0], allowed[1], disabled]
+
+    best_pool, state = optimizer.optimize(initial_pool=initial_pool)
+    # the sanitizer should have noted the removed item
+    assert 'Banana' in state.sanitized_removed
+    # resulting pool must not contain the disabled item
+    assert all(it['Name'] != 'Banana' for it in best_pool)
+    # size should equal requested count (3)
+    assert len(best_pool) == 3
+
+
 def test_swap_generation():
     """Test k-opt swap generation."""
     items = [
@@ -191,6 +219,7 @@ def test_swap_generation():
 
 
 def test_history_tracking():
+
     """Test history recording."""
     history = OptimizationHistory()
     
